@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:clarity_ai/core/widgets/glass_card.dart';
-import 'package:clarity_ai/models/ai_report.dart';
+import 'package:clarity_ai/models/v2_models.dart';
 import 'package:clarity_ai/features/report/presentation/widgets/score_ring.dart';
 
 class ReportPage extends StatelessWidget {

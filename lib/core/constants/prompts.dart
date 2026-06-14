@@ -21,6 +21,81 @@ JSON formatı şöyle olmalıdır:
 {"score": 0, "gaps": [{"title": "...", "detail": "..."}], "jargon": [{"word": "...", "suggestion": "..."}], "analogies": [{"topic": "...", "analogy": "..."}]}
 ''';
 
+  static const String flashcardPrompt = '''
+Sen bir eğitim asistanısın. Görevin, verilen metinden öğrenmeyi pekiştirecek ve akılda kalıcılığı artıracak Soru-Cevap formatında Hafıza Kartları (Flashcards) oluşturmaktır.
+
+KAYNAK METİN:
+{referenceText}
+
+Kurallar:
+1. En az 5, en fazla 10 adet soru oluştur.
+2. Sorular net, cevaplar ise akılda kalıcı ve kısa (maksimum 2-3 cümle) olmalı.
+3. Çıktıyı SADECE aşağıdaki JSON formatında ver, markdown veya başka bir metin ekleme:
+[
+  {"question": "Soru 1", "answer": "Cevap 1"},
+  {"question": "Soru 2", "answer": "Cevap 2"}
+]
+''';
+
+  static const String testPrompt = '''
+Sen bir eğitim asistanısın. Görevin, verilen metinden çoktan seçmeli test soruları oluşturmaktır.
+
+KAYNAK METİN:
+{referenceText}
+
+Kurallar:
+1. En az 5 adet çoktan seçmeli soru oluştur.
+2. Her soru için 4 veya 5 seçenek (options) belirle.
+3. Çıktıyı SADECE aşağıdaki JSON formatında ver, markdown veya başka bir metin ekleme:
+[
+  {
+    "question": "Soru metni",
+    "options": ["A seçeneği", "B seçeneği", "C seçeneği", "D seçeneği"],
+    "answer": "Doğru olan seçeneğin tam metni",
+    "explanation": "Bu cevabın neden doğru olduğunun açıklaması"
+  }
+]
+''';
+
+  static const String classicPrompt = '''
+Sen bir eğitim asistanısın. Görevin, verilen metinden klasik (açık uçlu) sorular oluşturmaktır.
+
+KAYNAK METİN:
+{referenceText}
+
+Kurallar:
+1. En az 5 adet klasik soru oluştur.
+2. Öğrencinin yanıtında geçmesi beklenen anahtar kelimeleri (expectedAnswerKeyword) belirle.
+3. Çıktıyı SADECE aşağıdaki JSON formatında ver, markdown veya başka bir metin ekleme:
+[
+  {
+    "question": "Açık uçlu soru metni",
+    "expectedAnswerKeyword": "Beklenen anahtar kelime veya kısa ifade",
+    "explanation": "Bu sorunun detaylı cevabı ve açıklaması"
+  }
+]
+''';
+
+  static const String adaptiveQuizPrompt = '''
+Sen adaptif bir eğitim asistanısın. Öğrencinin geçmişteki hatalarını analiz ederek, eksiklerini gidermeye yönelik hedeflenmiş bir sınav oluşturacaksın.
+
+KAYNAK METİN:
+{referenceText}
+
+ÖNCEKİ HATALAR:
+{previousMistakes}
+
+SINAV TİPİ: {quizType}
+
+Kurallar:
+1. Öğrencinin daha önce hata yaptığı konulara ağırlık ver.
+2. İstenen sınav tipine (test, classic veya flashcard) uygun formatta en az 5 soru oluştur.
+3. Çıktıyı SADECE seçilen sınav tipinin beklenen JSON formatında ver (markdown veya başka metin ekleme).
+4. Eğer quizType "test" ise `[{"question": "...", "options": ["..."], "answer": "...", "explanation": "..."}]` formatında dön.
+5. Eğer quizType "classic" ise `[{"question": "...", "expectedAnswerKeyword": "...", "explanation": "..."}]` formatında dön.
+6. Eğer quizType "flashcard" ise `[{"question": "...", "answer": "..."}]` formatında dön.
+''';
+
   static const String chatPrompt = '''
 Sen bir öğrenme asistanısın. Kullanıcının notlarına erişimin var. Kullanıcıya notları hakkında sorularını yanıtla.
 

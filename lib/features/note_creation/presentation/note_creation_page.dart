@@ -1,29 +1,33 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:clarity_ai/core/services/database_service.dart';
-import 'package:clarity_ai/models/note.dart';
+import 'package:clarity_ai/models/v2_models.dart';
+import 'package:clarity_ai/core/providers/data_providers.dart';
+import 'package:clarity_ai/core/widgets/glass_card.dart';
 
-class NoteCreationPage extends StatefulWidget {
+class NoteCreationPage extends ConsumerStatefulWidget {
   const NoteCreationPage({super.key});
 
   @override
-  State<NoteCreationPage> createState() => _NoteCreationPageState();
+  ConsumerState<NoteCreationPage> createState() => _NoteCreationPageState();
 }
 
-class _NoteCreationPageState extends State<NoteCreationPage> {
+class _NoteCreationPageState extends ConsumerState<NoteCreationPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
   String _selectedAudience = 'university'; // Default
+  Folder? _selectedFolder;
   bool _isLoading = false;
 
   Future<void> _pickPDF() async {
     try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
+      FilePickerResult? result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
       );
@@ -69,15 +73,26 @@ class _NoteCreationPageState extends State<NoteCreationPage> {
 
     final note = Note(
       title: _titleController.text.trim(),
-      referenceText: _contentController.text.trim(),
       targetAudience: _selectedAudience,
+      folderId: _selectedFolder?.id,
       createdAt: DateTime.now(),
     );
 
     final noteId = await DatabaseService.instance.insertNote(note);
+    
+    final material = NoteMaterial(
+      noteId: noteId,
+      type: 'text', // It's just extracted text for now
+      title: 'Ana Materyal',
+      content: _contentController.text.trim(),
+      createdAt: DateTime.now(),
+    );
+    await DatabaseService.instance.insertNoteMaterial(material);
+
     setState(() => _isLoading = false);
 
     if (mounted) {
+      ref.invalidate(notesProvider(_selectedFolder?.id));
       context.pushReplacement('/studio/$noteId');
     }
   }
@@ -85,6 +100,7 @@ class _NoteCreationPageState extends State<NoteCreationPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final foldersAsync = ref.watch(foldersProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Yeni Not Oluştur')),
@@ -102,16 +118,47 @@ class _NoteCreationPageState extends State<NoteCreationPage> {
                     decoration: const InputDecoration(hintText: 'Örn: Asenkron Programlama'),
                   ),
                   
+                  const SizedBox(height: 24),
+                  Text('Klasör (Opsiyonel)', style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurface)),
+                  const SizedBox(height: 8),
+                  foldersAsync.when(
+                    data: (folders) {
+                      return DropdownButtonFormField<Folder>(
+                        value: _selectedFolder,
+                        decoration: InputDecoration(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        hint: const Text('Klasör Seçin'),
+                        items: [
+                          const DropdownMenuItem<Folder>(
+                            value: null,
+                            child: Text('Klasör Yok'),
+                          ),
+                          ...folders.map((f) => DropdownMenuItem(
+                            value: f,
+                            child: Text(f.name),
+                          ))
+                        ],
+                        onChanged: (val) {
+                          setState(() => _selectedFolder = val);
+                        },
+                      );
+                    },
+                    loading: () => const CircularProgressIndicator(),
+                    error: (e, st) => Text('Hata: $e'),
+                  ),
+
                   const SizedBox(height: 32),
                   Text('Hedef Kitle', style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurface)),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      _buildAudienceChip('child', 'Çocuk', LucideIcons.baby),
+                      _buildAudienceCard('child', 'Çocuk', LucideIcons.baby),
                       const SizedBox(width: 8),
-                      _buildAudienceChip('university', 'Üniversiteli', LucideIcons.graduationCap),
+                      _buildAudienceCard('university', 'Üniversiteli', LucideIcons.graduationCap),
                       const SizedBox(width: 8),
-                      _buildAudienceChip('expert', 'Uzman', LucideIcons.briefcase),
+                      _buildAudienceCard('expert', 'Uzman', LucideIcons.briefcase),
                     ],
                   ),
 
@@ -124,7 +171,7 @@ class _NoteCreationPageState extends State<NoteCreationPage> {
                     child: OutlinedButton.icon(
                       onPressed: _pickPDF,
                       icon: const Icon(LucideIcons.fileUp),
-                      label: const Text('Belge Yükle (PDF)'),
+                      label: const Text('PDF Yükle'),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.all(16),
                         side: BorderSide(color: theme.colorScheme.onSurface.withOpacity(0.2)),
@@ -143,7 +190,7 @@ class _NoteCreationPageState extends State<NoteCreationPage> {
                     maxLines: 10,
                     minLines: 5,
                     decoration: const InputDecoration(
-                      hintText: 'Metni buraya yapıştırın...\n(Gerçek doğru veri olarak kabul edilecek)',
+                      hintText: 'Metin Yapıştır...\n(Gerçek doğru veri olarak kabul edilecek)',
                     ),
                   ),
 
@@ -161,39 +208,31 @@ class _NoteCreationPageState extends State<NoteCreationPage> {
     );
   }
 
-  Widget _buildAudienceChip(String id, String label, IconData icon) {
+  Widget _buildAudienceCard(String id, String label, IconData icon) {
     final isSelected = _selectedAudience == id;
     final theme = Theme.of(context);
     
     return Expanded(
-      child: GestureDetector(
+      child: GlassCard(
         onTap: () {
           HapticFeedback.selectionClick();
           setState(() => _selectedAudience = id);
         },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? theme.primaryColor : theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? theme.primaryColor : theme.colorScheme.onSurface.withOpacity(0.1),
-            ),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: isSelected ? Colors.white : theme.colorScheme.onSurface),
-              const SizedBox(height: 4),
-              Text(
-                label, 
-                style: TextStyle(
-                  fontSize: 12, 
-                  color: isSelected ? Colors.white : theme.colorScheme.onSurface,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        borderColor: isSelected ? theme.primaryColor : null,
+        child: Column(
+          children: [
+            Icon(icon, color: isSelected ? theme.primaryColor : theme.colorScheme.onSurface),
+            const SizedBox(height: 8),
+            Text(
+              label, 
+              style: TextStyle(
+                fontSize: 12, 
+                color: isSelected ? theme.primaryColor : theme.colorScheme.onSurface,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

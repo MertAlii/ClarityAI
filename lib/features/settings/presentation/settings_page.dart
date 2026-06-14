@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:clarity_ai/core/widgets/glass_card.dart';
-import 'package:clarity_ai/core/services/storage_service.dart';
-import 'package:clarity_ai/models/user_profile.dart';
-import 'package:clarity_ai/main.dart';
-import 'package:clarity_ai/core/services/database_service.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -17,246 +15,290 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
-  final StorageService _storage = StorageService();
-  UserProfile? _profile;
-  String _apiKey = '';
-
+  final TextEditingController _groqKeyController = TextEditingController();
+  final TextEditingController _openAiKeyController = TextEditingController();
+  final TextEditingController _geminiKeyController = TextEditingController();
+  
+  double _llamaProgress = 0.0;
+  double _gemmaProgress = 0.0;
+  bool _isLlamaDownloading = false;
+  bool _isGemmaDownloading = false;
+  
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadKeys();
   }
 
-  Future<void> _loadData() async {
-    final profile = await _storage.getUserProfile();
-    if (profile != null) {
-      final key = await _storage.getApiKey(profile.aiProvider);
+  Future<void> _loadKeys() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
       setState(() {
-        _profile = profile;
-        _apiKey = key ?? '';
+        _groqKeyController.text = prefs.getString('groq_api_key') ?? '';
+        _openAiKeyController.text = prefs.getString('openai_api_key') ?? '';
+        _geminiKeyController.text = prefs.getString('gemini_api_key') ?? '';
       });
     }
   }
 
-  void _cycleTheme() async {
-    HapticFeedback.lightImpact();
-    if (_profile == null) return;
-    
-    String newMode;
-    switch (_profile!.themeMode) {
-      case 'dark':
-        newMode = 'light';
-        break;
-      case 'light':
-        newMode = 'system';
-        break;
-      default:
-        newMode = 'dark';
+  Future<void> _saveKey(String keyName, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(keyName, value);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('API Anahtarı kaydedildi', style: GoogleFonts.inter()),
+          backgroundColor: const Color(0xFF242424),
+        ),
+      );
     }
-
-    setState(() {
-      _profile!.themeMode = newMode;
-    });
-
-    await _storage.saveUserProfile(_profile!);
-    final themeMode = switch (newMode) {
-      'dark' => ThemeMode.dark,
-      'light' => ThemeMode.light,
-      _ => ThemeMode.system,
-    };
-    ref.read(themeModeProvider.notifier).state = themeMode;
   }
-
-  void _showProviderDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text('AI Motoru'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: ['groq', 'openai', 'gemini'].map((p) {
-            return ListTile(
-              title: Text(p.toUpperCase()),
-              trailing: _profile?.aiProvider == p ? Icon(LucideIcons.check, color: Theme.of(context).primaryColor) : null,
-              onTap: () async {
-                if (_profile != null) {
-                  _profile!.aiProvider = p;
-                  await _storage.saveUserProfile(_profile!);
-                  final newKey = await _storage.getApiKey(p);
-                  setState(() {
-                    _apiKey = newKey ?? '';
-                  });
-                }
-                if (context.mounted) Navigator.pop(context);
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
+  
+  void _simulateDownload(String model) {
+    if (model == 'llama') {
+      setState(() => _isLlamaDownloading = true);
+      _simulateProgress((p) => setState(() => _llamaProgress = p), () => setState(() => _isLlamaDownloading = false));
+    } else {
+      setState(() => _isGemmaDownloading = true);
+      _simulateProgress((p) => setState(() => _gemmaProgress = p), () => setState(() => _isGemmaDownloading = false));
+    }
   }
-
-  void _editApiKey() {
-    final TextEditingController controller = TextEditingController(text: _apiKey);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text('API Anahtarı'),
-        content: TextField(
-          controller: controller,
-          obscureText: true,
-          decoration: const InputDecoration(hintText: 'Yeni anahtar...'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('İptal')),
-          ElevatedButton(
-            onPressed: () async {
-              if (_profile != null) {
-                await _storage.saveApiKey(_profile!.aiProvider, controller.text);
-                setState(() => _apiKey = controller.text);
-              }
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: const Text('Kaydet'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _clearData() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text('Tüm Verileri Sil', style: TextStyle(color: Colors.red)),
-        content: const Text('Tüm notlarınız, API anahtarlarınız ve ayarlarınız silinecek. Emin misiniz?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('İptal')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              await _storage.clearAll();
-              // In a real app, we'd also clear the DB file.
-              // For now we exit app or force reload.
-              SystemNavigator.pop();
-            },
-            child: const Text('SİL'),
-          ),
-        ],
-      ),
-    );
+  
+  void _simulateProgress(Function(double) onProgress, VoidCallback onDone) async {
+    for (int i = 1; i <= 10; i++) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (mounted) onProgress(i / 10.0);
+    }
+    if (mounted) onDone();
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    if (_profile == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Ayarlar')),
+      backgroundColor: const Color(0xFF0D0D0D),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text('Ayarlar', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
       body: ListView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(16.0),
         children: [
+          // Uygulama Ayarları
+          Text('Uygulama Ayarları', style: GoogleFonts.outfit(color: const Color(0xFF84CC16), fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
           GlassCard(
-            padding: EdgeInsets.zero,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.palette_outlined, color: Colors.white),
+              title: Text('Tema', style: GoogleFonts.inter(color: Colors.white)),
+              trailing: DropdownButton<String>(
+                value: 'Koyu',
+                dropdownColor: const Color(0xFF1A1A1A),
+                style: GoogleFonts.inter(color: Colors.white),
+                underline: const SizedBox(),
+                items: ['Açık', 'Koyu', 'Sistem'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                onChanged: (val) {
+                  // handle theme
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          
+          // Yapay Zeka ve Kotalar
+          Text('Yapay Zeka ve Kotalar', style: GoogleFonts.outfit(color: const Color(0xFF84CC16), fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          GlassCard(
+            onTap: () => context.push('/stats'),
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.analytics_outlined, color: Colors.white),
+              title: Text('İstatistikler (Meraklısına)', style: GoogleFonts.inter(color: Colors.white)),
+              trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+            ),
+          ),
+          const SizedBox(height: 12),
+          GlassCard(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ListTile(
-                  leading: const Icon(LucideIcons.palette),
-                  title: const Text('Tema'),
-                  trailing: Text(_profile!.themeMode.toUpperCase()),
-                  onTap: _cycleTheme,
-                ),
-                const Divider(height: 1, thickness: 0.5),
-                ListTile(
-                  leading: const Icon(LucideIcons.cpu),
-                  title: const Text('Yapay Zeka Motoru'),
-                  trailing: Text(_profile!.aiProvider.toUpperCase()),
-                  onTap: _showProviderDialog,
-                ),
-                const Divider(height: 1, thickness: 0.5),
-                ListTile(
-                  leading: const Icon(LucideIcons.key),
-                  title: const Text('API Anahtarı'),
-                  trailing: Text(_apiKey.isEmpty ? 'Girilmedi' : '********${_apiKey.length > 4 ? _apiKey.substring(_apiKey.length - 4) : ''}'),
-                  onTap: _editApiKey,
-                ),
-                const Divider(height: 1, thickness: 0.5),
-                ListTile(
-                  leading: const Icon(LucideIcons.trash2, color: Colors.red),
-                  title: const Text('Verileri Temizle', style: TextStyle(color: Colors.red)),
-                  onTap: _clearData,
-                ),
+                Text('API Anahtarları', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 12),
+                _buildApiField('Groq API Key', _groqKeyController, (v) => _saveKey('groq_api_key', v)),
+                const SizedBox(height: 8),
+                _buildApiField('OpenAI API Key', _openAiKeyController, (v) => _saveKey('openai_api_key', v)),
+                const SizedBox(height: 8),
+                _buildApiField('Gemini API Key', _geminiKeyController, (v) => _saveKey('gemini_api_key', v)),
               ],
             ),
           ),
+          const SizedBox(height: 24),
           
-          const SizedBox(height: 48),
-          
-          // About Section
-          Center(
+          // Yerel Modeller (GGUF)
+          Text('Yerel Modeller (GGUF)', style: GoogleFonts.outfit(color: const Color(0xFF84CC16), fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          GlassCard(
             child: Column(
               children: [
+                _buildModelRow('Llama-3-8b.gguf', '4.7 GB', _isLlamaDownloading, _llamaProgress, () => _simulateDownload('llama')),
+                const Divider(color: Colors.white10, height: 24),
+                _buildModelRow('Gemma-2b.gguf', '1.4 GB', _isGemmaDownloading, _gemmaProgress, () => _simulateDownload('gemma')),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          
+          // Hakkında
+          Text('Hakkında', style: GoogleFonts.outfit(color: const Color(0xFF84CC16), fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          GlassCard(
+            child: Column(
+              children: [
+                const SizedBox(height: 16),
                 Container(
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: theme.primaryColor.withOpacity(0.1),
+                    color: const Color(0xFF242424),
                     shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF84CC16), width: 2),
                   ),
-                  child: Icon(LucideIcons.brainCircuit, size: 40, color: theme.primaryColor),
+                  child: const Center(child: Icon(Icons.school, size: 40, color: Color(0xFF84CC16))),
                 ),
-                const SizedBox(height: 16),
-                Text('Clarity AI', style: theme.textTheme.displayMedium),
-                Text('v1.0.0', style: theme.textTheme.bodySmall),
-                
+                const SizedBox(height: 12),
+                Text('Clarity AI', style: GoogleFonts.outfit(fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold)),
+                Text('v3.0.0 LMS Edition', style: GoogleFonts.inter(fontSize: 14, color: Colors.white54)),
                 const SizedBox(height: 24),
-                GlassCard(
+                
+                // Developer Card
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.02),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white10),
+                  ),
                   child: Row(
                     children: [
                       const CircleAvatar(
-                        child: Icon(LucideIcons.user),
+                        radius: 24,
+                        backgroundColor: Color(0xFF242424),
+                        child: Icon(Icons.person, color: Colors.white),
                       ),
-                      const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Alkan', style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
-                          Text('Junior Software Developer', style: theme.textTheme.bodySmall),
-                        ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Alkan', style: GoogleFonts.outfit(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+                            Text('Junior Software Developer', style: GoogleFonts.inter(fontSize: 13, color: const Color(0xFFF59E0B))),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 16),
-                GlassCard(
+                ListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  tileColor: Colors.white.withOpacity(0.02),
+                  leading: const Icon(Icons.code, color: Colors.white),
+                  title: Text('GitHub', style: GoogleFonts.inter(color: Colors.white)),
+                  subtitle: const Text('MertAlii/ClarityAI', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  trailing: const Icon(Icons.open_in_new, color: Colors.white54, size: 16),
                   onTap: () async {
                     HapticFeedback.lightImpact();
-                    final url = Uri.parse('https://github.com/MertAlii/ClarityAI.git');
-                    if (await canLaunchUrl(url)) {
-                      await launchUrl(url);
-                    }
+                    final url = Uri.parse('https://github.com/MertAlii/ClarityAI');
+                    if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
                   },
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(LucideIcons.github),
-                      SizedBox(width: 8),
-                      Text('GitHub'),
-                    ],
-                  ),
-                )
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  tileColor: Colors.white.withOpacity(0.02),
+                  leading: const Icon(Icons.work_outline, color: Colors.white),
+                  title: Text('LinkedIn', style: GoogleFonts.inter(color: Colors.white)),
+                  subtitle: const Text('mer1alii', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  trailing: const Icon(Icons.open_in_new, color: Colors.white54, size: 16),
+                  onTap: () async {
+                    HapticFeedback.lightImpact();
+                    final url = Uri.parse('https://linkedin.com/in/mer1alii');
+                    if (await canLaunchUrl(url)) await launchUrl(url, mode: LaunchMode.externalApplication);
+                  },
+                ),
               ],
             ),
           ),
+          const SizedBox(height: 40),
         ],
       ),
+    );
+  }
+
+  Widget _buildApiField(String hint, TextEditingController controller, Function(String) onSubmitted) {
+    return TextField(
+      controller: controller,
+      obscureText: true,
+      style: GoogleFonts.inter(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: Colors.white24),
+        filled: true,
+        fillColor: const Color(0xFF242424),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        suffixIcon: IconButton(
+          icon: const Icon(Icons.save_outlined, color: Color(0xFF84CC16)),
+          onPressed: () {
+            HapticFeedback.lightImpact();
+            onSubmitted(controller.text);
+          },
+        ),
+      ),
+      onSubmitted: (v) {
+        HapticFeedback.lightImpact();
+        onSubmitted(v);
+      },
+    );
+  }
+
+  Widget _buildModelRow(String name, String size, bool isDownloading, double progress, VoidCallback onDownload) {
+    return Row(
+      children: [
+        const Icon(Icons.memory, color: Colors.white70),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name, style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w500)),
+              Text(size, style: GoogleFonts.inter(color: Colors.white54, fontSize: 12)),
+              if (isDownloading) ...[
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: Colors.white10,
+                  color: const Color(0xFF84CC16),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ]
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        if (!isDownloading && progress == 0.0)
+          IconButton(
+            icon: const Icon(Icons.download_rounded, color: Color(0xFF84CC16)),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              onDownload();
+            },
+          )
+        else if (progress >= 1.0)
+          const Icon(Icons.check_circle, color: Color(0xFF22C55E))
+      ],
     );
   }
 }

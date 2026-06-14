@@ -5,9 +5,14 @@ import 'package:clarity_ai/features/setup/presentation/setup_page.dart';
 import 'package:clarity_ai/features/dashboard/presentation/dashboard_page.dart';
 import 'package:clarity_ai/features/note_creation/presentation/note_creation_page.dart';
 import 'package:clarity_ai/features/studio/presentation/studio_page.dart';
-import 'package:clarity_ai/features/report/presentation/report_page.dart';
+import 'package:clarity_ai/features/dashboard/presentation/note_detail_page.dart';
 import 'package:clarity_ai/features/settings/presentation/settings_page.dart';
 import 'package:clarity_ai/core/services/storage_service.dart';
+import 'package:clarity_ai/models/v2_models.dart';
+import 'package:clarity_ai/features/dashboard/presentation/flashcard_quiz_page.dart';
+import 'package:clarity_ai/features/dashboard/presentation/test_quiz_page.dart';
+import 'package:clarity_ai/features/settings/presentation/stats_page.dart';
+import 'package:clarity_ai/features/chat/presentation/chat_detail_page.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -96,13 +101,13 @@ Future<GoRouter> createRouter() async {
         },
       ),
       GoRoute(
-        path: '/report/:noteId',
-        name: 'report',
+        path: '/note_detail/:noteId',
+        name: 'note_detail',
         pageBuilder: (context, state) {
           final noteId = int.parse(state.pathParameters['noteId']!);
           return CustomTransitionPage(
             key: state.pageKey,
-            child: ReportPage(noteId: noteId),
+            child: NoteDetailPage(noteId: noteId),
             transitionsBuilder:
                 (context, animation, secondaryAnimation, child) {
               return FadeTransition(opacity: animation, child: child);
@@ -127,6 +132,59 @@ Future<GoRouter> createRouter() async {
             );
           },
         ),
+      ),
+      GoRoute(
+        path: '/flashcard_quiz',
+        name: 'flashcard_quiz',
+        pageBuilder: (context, state) {
+          final quiz = state.extra as QuizData;
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: FlashcardQuizPage(quiz: quiz),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+          );
+        },
+      ),
+      GoRoute(
+        path: '/test_quiz',
+        name: 'test_quiz',
+        pageBuilder: (context, state) {
+          final quiz = state.extra as QuizData;
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: TestQuizPage(quiz: quiz),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+          );
+        },
+      ),
+      GoRoute(
+        path: '/stats',
+        name: 'stats',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const StatsPage(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      ),
+      GoRoute(
+        path: '/chat/:sessionId',
+        name: 'chat_detail',
+        pageBuilder: (context, state) {
+          final sessionId = state.pathParameters['sessionId']!;
+          return CustomTransitionPage(
+            key: state.pageKey,
+            child: ChatDetailPage(sessionId: sessionId),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+          );
+        },
       ),
     ],
   );

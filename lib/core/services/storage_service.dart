@@ -1,6 +1,6 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:clarity_ai/models/user_profile.dart';
+import 'package:clarity_ai/models/v2_models.dart';
 
 class StorageService {
   final _secureStorage = const FlutterSecureStorage();

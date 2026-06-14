@@ -9,7 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:clarity_ai/core/services/database_service.dart';
 import 'package:clarity_ai/core/services/storage_service.dart';
 import 'package:clarity_ai/core/services/ai_service.dart';
-import 'package:clarity_ai/models/note.dart';
+import 'package:clarity_ai/models/v2_models.dart';
 
 class StudioPage extends StatefulWidget {
   final int noteId;
@@ -107,15 +107,25 @@ class _StudioPageState extends State<StudioPage> with SingleTickerProviderStateM
         aiService = GeminiAiService(apiKey: key);
       }
 
+      final materials = await DatabaseService.instance.getNoteMaterials(widget.noteId);
+      final referenceText = materials.map((m) => m.content).join('\n\n');
+
       final report = await aiService.analyzeExplanation(
-        referenceText: _note!.referenceText,
+        referenceText: referenceText,
         transcript: finalTranscript,
         targetAudience: _note!.targetAudience,
       );
 
-      _note!.transcript = finalTranscript;
       _note!.score = report.score;
       await DatabaseService.instance.updateNote(_note!);
+      
+      await DatabaseService.instance.insertNoteMaterial(NoteMaterial(
+        noteId: _note!.id!,
+        type: 'transcript',
+        title: 'Benim Anlatımım',
+        content: finalTranscript,
+        createdAt: DateTime.now(),
+      ));
 
       // Since we simulate storing the JSON report in the db (or passing it via state in a real app, 
       // but here we just navigate and let ReportPage fetch the note. Wait, ReportPage needs the full report. 

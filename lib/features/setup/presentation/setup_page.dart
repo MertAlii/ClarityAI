@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:clarity_ai/core/widgets/glass_card.dart';
 import 'package:clarity_ai/core/services/storage_service.dart';
-import 'package:clarity_ai/models/user_profile.dart';
+import 'package:clarity_ai/models/v2_models.dart';
 import 'package:clarity_ai/main.dart';
 
 class SetupPage extends ConsumerStatefulWidget {

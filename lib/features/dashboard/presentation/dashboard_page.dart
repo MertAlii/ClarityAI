@@ -1,430 +1,492 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:uuid/uuid.dart';
+import 'package:clarity_ai/app/theme/app_colors.dart';
+import 'package:clarity_ai/app/theme/app_text_styles.dart';
+import 'package:clarity_ai/core/widgets/floating_navbar.dart';
 import 'package:clarity_ai/core/widgets/glass_card.dart';
-import 'package:clarity_ai/core/services/database_service.dart';
-import 'package:clarity_ai/core/services/storage_service.dart';
-import 'package:clarity_ai/core/services/ai_service.dart';
-import 'package:clarity_ai/models/note.dart';
-import 'package:clarity_ai/models/user_profile.dart';
+import 'package:clarity_ai/core/providers/data_providers.dart';
+import 'package:clarity_ai/models/v2_models.dart';
 
-class DashboardPage extends ConsumerStatefulWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
   @override
-  ConsumerState<DashboardPage> createState() => _DashboardPageState();
+  State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends ConsumerState<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage> {
   int _currentIndex = 0;
-  final StorageService _storage = StorageService();
-  String _userName = '';
-  AiService? _aiService;
 
-  @override
-  void initState() {
-    super.initState();
-    initializeDateFormatting('tr_TR');
-    _loadProfile();
-  }
-
-  Future<void> _loadProfile() async {
-    final profile = await _storage.getUserProfile();
-    if (profile != null) {
-      setState(() => _userName = profile.name);
-      final key = await _storage.getApiKey(profile.aiProvider);
-      if (key != null) {
-        if (profile.aiProvider == 'groq') {
-          _aiService = GroqAiService(apiKey: key);
-        } else if (profile.aiProvider == 'openai') {
-          _aiService = OpenAiService(apiKey: key);
-        } else if (profile.aiProvider == 'gemini') {
-          _aiService = GeminiAiService(apiKey: key);
-        }
-      }
-    }
-  }
+  final List<Widget> _tabs = [
+    const _HomeTab(),
+    const Center(child: Text("Takvim ve Etkinlikler")),
+    const Center(child: Text("Sohbet")),
+    const Center(child: Text("Ayarlar")),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_currentIndex == 0 ? 'Kütüphane' : 'AI Asistan'),
-        actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.settings),
-            onPressed: () => context.push('/settings'),
+      backgroundColor: Theme.of(context).brightness == Brightness.dark
+          ? AppColors.darkBackground
+          : AppColors.lightBackground,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: _currentIndex,
+            children: _tabs,
+          ),
+          FloatingNavbar(
+            currentIndex: _currentIndex,
+            onTap: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+            icons: const [
+              LucideIcons.home,
+              LucideIcons.calendar,
+              LucideIcons.messageCircle,
+              LucideIcons.settings,
+            ],
+            labels: const [
+              "Ana Sayfa",
+              "Takvim",
+              "Sohbet",
+              "Ayarlar",
+            ],
           ),
         ],
       ),
-      body: _currentIndex == 0 ? const _HomeTab() : _ChatTab(aiService: _aiService),
       floatingActionButton: _currentIndex == 0
-          ? FloatingActionButton(
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                context.push('/create').then((_) => setState(() {}));
-              },
-              child: const Icon(LucideIcons.plus),
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 100.0), // Navbar'ın üzerinde kalması için
+              child: FloatingActionButton(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  context.push('/create');
+                },
+                backgroundColor: Theme.of(context).brightness == Brightness.dark
+                    ? AppColors.darkAccent
+                    : AppColors.lightAccent,
+                child: const Icon(LucideIcons.plus, color: Colors.white),
+              ),
             )
           : null,
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(30),
-            child: BottomNavigationBar(
-              currentIndex: _currentIndex,
-              onTap: (i) {
-                HapticFeedback.selectionClick();
-                setState(() => _currentIndex = i);
-              },
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              selectedItemColor: Theme.of(context).primaryColor,
-              unselectedItemColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-              showSelectedLabels: false,
-              showUnselectedLabels: false,
-              items: const [
-                BottomNavigationBarItem(icon: Icon(LucideIcons.home), label: 'Ana Sayfa'),
-                BottomNavigationBarItem(icon: Icon(LucideIcons.messageCircle), label: 'Chat'),
+    );
+  }
+}
+
+class _HomeTab extends ConsumerStatefulWidget {
+  const _HomeTab();
+
+  @override
+  ConsumerState<_HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends ConsumerState<_HomeTab> {
+  final TextEditingController _searchController = TextEditingController();
+  bool _isGridView = true;
+  int? _selectedFolderId;
+  String _searchQuery = "";
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final foldersAsync = ref.watch(foldersProvider);
+    final notesAsync = ref.watch(notesProvider(_selectedFolderId));
+
+    return SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Analitik Kartları
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GlassCard(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(LucideIcons.clock, size: 16, color: AppColors.streakOrange),
+                            const SizedBox(width: 8),
+                            Text("Bugün Çalışılan", style: AppTextStyles.caption.copyWith(color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text("45 dk", style: AppTextStyles.headline3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: GlassCard(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(LucideIcons.calendarClock, size: 16, color: AppColors.warning),
+                            const SizedBox(width: 8),
+                            Text("Yaklaşan Sınav", style: AppTextStyles.caption.copyWith(color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text("3 Gün", style: AppTextStyles.headline3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)),
+                      ],
+                    ),
+                  ),
+                ),
               ],
+            ),
+          ),
+
+          // Arama ve Görünüm Değiştirici
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                      ),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      style: AppTextStyles.bodyMedium.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+                      onChanged: (val) {
+                        setState(() {
+                          _searchQuery = val.trim();
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: "Notlarda ve materyallerde ara...",
+                        hintStyle: AppTextStyles.bodyMedium.copyWith(color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                        prefixIcon: Icon(LucideIcons.search, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    setState(() {
+                      _isGridView = !_isGridView;
+                    });
+                  },
+                  child: Container(
+                    height: 48,
+                    width: 48,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                      ),
+                    ),
+                    child: Icon(
+                      _isGridView ? LucideIcons.list : LucideIcons.grid,
+                      color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (_searchQuery.isNotEmpty)
+            Expanded(
+              child: _buildDeepSearchResults(),
+            )
+          else ...[
+            // Klasör Listesi
+            foldersAsync.when(
+              data: (folders) {
+                return SizedBox(
+                  height: 40,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: folders.length + 2, // Tümü + Klasörler + Yeni Klasör
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        final isSelected = _selectedFolderId == null;
+                        return _buildFolderChip(
+                          "Tümü",
+                          isSelected,
+                          isDark,
+                          () {
+                            HapticFeedback.lightImpact();
+                            setState(() => _selectedFolderId = null);
+                          },
+                        );
+                      } else if (index == folders.length + 1) {
+                        return GestureDetector(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            // Yeni klasör oluşturma işlemi buraya eklenecek
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isDark ? AppColors.darkAccent : AppColors.lightAccent,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(LucideIcons.plus, size: 16, color: isDark ? AppColors.darkAccent : AppColors.lightAccent),
+                                const SizedBox(width: 4),
+                                Text(
+                                  "Yeni Klasör",
+                                  style: AppTextStyles.label.copyWith(
+                                    color: isDark ? AppColors.darkAccent : AppColors.lightAccent,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      } else {
+                        final folder = folders[index - 1];
+                        final isSelected = _selectedFolderId == folder.id;
+                        return _buildFolderChip(
+                          folder.name,
+                          isSelected,
+                          isDark,
+                          () {
+                            HapticFeedback.lightImpact();
+                            setState(() => _selectedFolderId = folder.id);
+                          },
+                        );
+                      }
+                    },
+                  ),
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (err, stack) => Center(
+                child: Text("Klasörler yüklenemedi.", style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error)),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Notlar
+            Expanded(
+              child: notesAsync.when(
+                data: (notes) {
+                  if (notes.isEmpty) {
+                    return Center(
+                      child: Text(
+                        "Burada henüz not yok.",
+                        style: AppTextStyles.bodyMedium.copyWith(color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                      ),
+                    );
+                  }
+                  
+                  return _isGridView
+                      ? GridView.builder(
+                          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 120),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 0.85,
+                          ),
+                          itemCount: notes.length,
+                          itemBuilder: (context, index) {
+                            return _buildNoteCard(notes[index], isDark, isGrid: true);
+                          },
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 120),
+                          itemCount: notes.length,
+                          itemBuilder: (context, index) {
+                            return _buildNoteCard(notes[index], isDark, isGrid: false);
+                          },
+                        );
+                },
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, stack) => Center(
+                  child: Text("Notlar yüklenemedi.", style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error)),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFolderChip(String label, bool isSelected, bool isDark, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected 
+              ? (isDark ? AppColors.darkAccent : AppColors.lightAccent)
+              : (isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? Colors.transparent
+                : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: AppTextStyles.label.copyWith(
+              color: isSelected
+                  ? Colors.white
+                  : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             ),
           ),
         ),
       ),
     );
   }
-}
 
-class _HomeTab extends StatelessWidget {
-  const _HomeTab();
+  Widget _buildNoteCard(Note note, bool isDark, {required bool isGrid}) {
+    Widget content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Icon(
+              LucideIcons.fileText,
+              color: isDark ? AppColors.darkAccent : AppColors.lightAccent,
+              size: 20,
+            ),
+            if (note.isStarred == 1)
+              const Icon(LucideIcons.star, color: AppColors.premiumGold, size: 16),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          note.title,
+          style: AppTextStyles.label.copyWith(
+            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+            fontWeight: FontWeight.bold,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (isGrid) const Spacer() else const SizedBox(height: 8),
+        Text(
+          "Hedef: ${note.targetAudience}",
+          style: AppTextStyles.caption.copyWith(
+            color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
 
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<Note>>(
-      future: DatabaseService.instance.getAllNotes(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    return GlassCard(
+      margin: isGrid ? EdgeInsets.zero : const EdgeInsets.only(bottom: 12),
+      onTap: () {
+        context.push('/note/${note.id}');
+      },
+      child: content,
+    );
+  }
+
+  Widget _buildDeepSearchResults() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final notesAsync = ref.watch(notesProvider(null));
+    
+    return notesAsync.when(
+      data: (notes) {
+        final filtered = notes.where((n) => n.title.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
         
-        final notes = snapshot.data ?? [];
-        
-        if (notes.isEmpty) {
+        if (filtered.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(LucideIcons.folderOpen, size: 64, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2)),
+                Icon(LucideIcons.searchX, size: 48, color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
                 const SizedBox(height: 16),
-                Text('Henüz bir notunuz yok.', style: Theme.of(context).textTheme.bodyLarge),
-                const SizedBox(height: 8),
-                Text('İlk notunuzu oluşturmak için + butonuna tıklayın.', 
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5))),
+                Text(
+                  "Sonuç bulunamadı",
+                  style: AppTextStyles.bodyMedium.copyWith(color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                ),
               ],
             ),
           );
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(24),
-          itemCount: notes.length + 1,
+          padding: const EdgeInsets.only(left: 16, right: 16, bottom: 120),
+          itemCount: filtered.length,
           itemBuilder: (context, index) {
-            if (index == 0) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Text('Merhaba, \nbugün ne öğreniyoruz?', style: Theme.of(context).textTheme.displayLarge),
-              );
-            }
-            
-            final note = notes[index - 1];
-            final score = note.score ?? 0;
-            Color scoreColor = Theme.of(context).colorScheme.error; // < 40
-            if (score >= 40 && score < 70) scoreColor = Colors.orange;
-            if (score >= 70) scoreColor = Colors.green;
-
+            final note = filtered[index];
             return GlassCard(
-              margin: const EdgeInsets.only(bottom: 16),
-              onTap: () => context.push('/report/${note.id}'),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(DateFormat('dd MMMM yyyy', 'tr_TR').format(note.createdAt), style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: 8),
-                  Text(note.title, style: Theme.of(context).textTheme.displaySmall),
-                  const SizedBox(height: 16),
-                  if (note.score != null) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: score / 100,
-                              color: scoreColor,
-                              backgroundColor: scoreColor.withOpacity(0.2),
-                              minHeight: 6,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text('%${score.toInt()}', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: scoreColor)),
-                      ],
-                    ),
-                  ] else ...[
-                    Text('Henüz analiz edilmedi', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.orange)),
-                  ]
-                ],
+              margin: const EdgeInsets.only(bottom: 12),
+              onTap: () {
+                context.push('/note/${note.id}');
+              },
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: (isDark ? AppColors.darkAccent : AppColors.lightAccent).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(LucideIcons.search, color: isDark ? AppColors.darkAccent : AppColors.lightAccent),
+                ),
+                title: Text(
+                  note.title,
+                  style: AppTextStyles.bodyLarge.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+                ),
+                subtitle: Text(
+                  "Derin Arama Eşleşmesi",
+                  style: AppTextStyles.caption.copyWith(color: isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted),
+                ),
               ),
             );
           },
         );
       },
-    );
-  }
-}
-
-class _ChatTab extends StatefulWidget {
-  final AiService? aiService;
-  const _ChatTab({this.aiService});
-
-  @override
-  State<_ChatTab> createState() => _ChatTabState();
-}
-
-class _ChatTabState extends State<_ChatTab> {
-  final TextEditingController _textController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-  List<ChatMessage> _messages = [];
-  bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadMessages();
-  }
-
-  Future<void> _loadMessages() async {
-    final msgs = await DatabaseService.instance.getChatMessages();
-    if (msgs.isEmpty) {
-      final initialMsg = ChatMessage(
-        id: const Uuid().v4(),
-        content: 'Merhaba! Ben öğrenme asistanınız. Notlarınız hakkında her şeyi sorabilirsiniz. 📚',
-        isUser: false,
-        timestamp: DateTime.now(),
-      );
-      await DatabaseService.instance.insertChatMessage(initialMsg);
-      msgs.add(initialMsg);
-    }
-    setState(() => _messages = msgs);
-    _scrollToBottom();
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  Future<void> _sendMessage() async {
-    final text = _textController.text.trim();
-    if (text.isEmpty || widget.aiService == null) return;
-
-    _textController.clear();
-    final userMsg = ChatMessage(
-      id: const Uuid().v4(),
-      content: text,
-      isUser: true,
-      timestamp: DateTime.now(),
-    );
-
-    setState(() {
-      _messages.add(userMsg);
-      _isLoading = true;
-    });
-    await DatabaseService.instance.insertChatMessage(userMsg);
-    _scrollToBottom();
-
-    try {
-      final notes = await DatabaseService.instance.getAllNotes();
-      final aiResponse = await widget.aiService!.chat(
-        message: text,
-        userNotes: notes,
-        history: _messages,
-      );
-
-      final aiMsg = ChatMessage(
-        id: const Uuid().v4(),
-        content: aiResponse,
-        isUser: false,
-        timestamp: DateTime.now(),
-      );
-
-      setState(() {
-        _messages.add(aiMsg);
-        _isLoading = false;
-      });
-      await DatabaseService.instance.insertChatMessage(aiMsg);
-      _scrollToBottom();
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Hata: $e')));
-      }
-    }
-  }
-
-  List<InlineSpan> _parseMessageWithReferences(String content) {
-    final spans = <InlineSpan>[];
-    final regex = RegExp(r'\[\[(.*?)\|(\d+)\]\]');
-    int lastMatchEnd = 0;
-
-    for (final match in regex.allMatches(content)) {
-      if (match.start > lastMatchEnd) {
-        spans.add(TextSpan(text: content.substring(lastMatchEnd, match.start)));
-      }
-
-      final title = match.group(1)!;
-      final noteIdStr = match.group(2)!;
-      final noteId = int.tryParse(noteIdStr);
-
-      spans.add(
-        WidgetSpan(
-          alignment: PlaceholderAlignment.middle,
-          child: GestureDetector(
-            onTap: () {
-              if (noteId != null) {
-                context.push('/report/$noteId');
-              }
-            },
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Theme.of(context).primaryColor, width: 0.5),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(LucideIcons.fileText, size: 12, color: Theme.of(context).primaryColor),
-                  const SizedBox(width: 4),
-                  Text(title, style: TextStyle(fontSize: 12, color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-
-      lastMatchEnd = match.end;
-    }
-
-    if (lastMatchEnd < content.length) {
-      spans.add(TextSpan(text: content.substring(lastMatchEnd)));
-    }
-
-    return spans;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.aiService == null) {
-      return Center(child: Text('AI Motoru ayarlanmamış. Lütfen ayarlardan yapılandırın.', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge));
-    }
-
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(16),
-            itemCount: _messages.length,
-            itemBuilder: (context, index) {
-              final msg = _messages[index];
-              final isUser = msg.isUser;
-              return Align(
-                alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                  decoration: BoxDecoration(
-                    color: isUser ? Theme.of(context).primaryColor : Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(16).copyWith(
-                      bottomRight: isUser ? const Radius.circular(0) : null,
-                      bottomLeft: !isUser ? const Radius.circular(0) : null,
-                    ),
-                  ),
-                  child: isUser 
-                      ? Text(msg.content, style: TextStyle(color: Theme.of(context).colorScheme.onPrimary))
-                      : RichText(
-                          text: TextSpan(
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
-                            children: _parseMessageWithReferences(msg.content),
-                          ),
-                        ),
-                ),
-              );
-            },
-          ),
-        ),
-        if (_isLoading)
-          const Padding(
-            padding: EdgeInsets.all(8.0),
-            child: CircularProgressIndicator(),
-          ),
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: Theme.of(context).colorScheme.surface,
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _textController,
-                  decoration: const InputDecoration(
-                    hintText: 'Bir şeyler sorun...',
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                  onSubmitted: (_) => _sendMessage(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor,
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(LucideIcons.send, color: Colors.white),
-                  onPressed: _sendMessage,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, stack) => Center(
+        child: Text("Arama başarısız.", style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error)),
+      ),
     );
   }
 }

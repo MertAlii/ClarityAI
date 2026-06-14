@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:clarity_ai/models/note.dart';
-import 'package:clarity_ai/models/ai_report.dart';
+import 'package:clarity_ai/models/v2_models.dart';
+
 import 'package:clarity_ai/core/constants/prompts.dart';
+import 'package:clarity_ai/core/services/database_service.dart';
 
 abstract class AiService {
   Future<AiReport> analyzeExplanation({
@@ -17,6 +18,17 @@ abstract class AiService {
     required List<Note> userNotes,
     List<ChatMessage>? history,
   });
+
+  Future<List<Map<String, dynamic>>> generateQuiz({
+    required String referenceText,
+    required String type,
+  });
+
+  Future<List<Map<String, dynamic>>> generateAdaptiveQuiz({
+    required String referenceText,
+    required String type,
+    required String mistakes,
+  });
 }
 
 class GroqAiService implements AiService {
@@ -26,6 +38,11 @@ class GroqAiService implements AiService {
   GroqAiService({required this.apiKey}) {
     _dio.options.headers['Authorization'] = 'Bearer $apiKey';
     _dio.options.headers['Content-Type'] = 'application/json';
+  }
+
+  Future<void> _trackUsage(String provider, String prompt, String response) async {
+    final tokens = (prompt.length + response.length) ~/ 4;
+    await DatabaseService.instance.incrementTokenUsage(provider, tokens, );
   }
 
   @override
@@ -53,7 +70,8 @@ class GroqAiService implements AiService {
       );
 
       final content = response.data['choices'][0]['message']['content'] as String;
-      // Clean potential markdown blocks
+      await _trackUsage('Groq', prompt, content);
+      
       final cleanJson = content.replaceAll('```json', '').replaceAll('```', '').trim();
       return AiReport.fromJson(jsonDecode(cleanJson));
     } catch (e) {
@@ -95,9 +113,86 @@ class GroqAiService implements AiService {
         },
       );
 
-      return response.data['choices'][0]['message']['content'] as String;
+      final content = response.data['choices'][0]['message']['content'] as String;
+      final fullPrompt = messages.map((m) => m['content']).join('\n');
+      await _trackUsage('Groq', fullPrompt, content);
+      
+      return content;
     } catch (e) {
       throw Exception('Groq Chat Hatası: $e');
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> generateQuiz({
+    required String referenceText,
+    required String type,
+  }) async {
+    String promptTemplate;
+    if (type == 'test') {
+      promptTemplate = Prompts.testPrompt;
+    } else if (type == 'classic') {
+      promptTemplate = Prompts.classicPrompt;
+    } else {
+      promptTemplate = Prompts.flashcardPrompt;
+    }
+
+    final prompt = promptTemplate.replaceAll('{referenceText}', referenceText);
+
+    try {
+      final response = await _dio.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        data: {
+          'model': 'llama-3.3-70b-versatile',
+          'messages': [
+            {'role': 'user', 'content': prompt}
+          ],
+          'temperature': 0.1,
+        },
+      );
+
+      final content = response.data['choices'][0]['message']['content'] as String;
+      await _trackUsage('Groq', prompt, content);
+      
+      final cleanJson = content.replaceAll('```json', '').replaceAll('```', '').trim();
+      final List<dynamic> decoded = jsonDecode(cleanJson);
+      return decoded.map((e) => e as Map<String, dynamic>).toList();
+    } catch (e) {
+      throw Exception('Groq Quiz Hatası: $e');
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> generateAdaptiveQuiz({
+    required String referenceText,
+    required String type,
+    required String mistakes,
+  }) async {
+    final prompt = Prompts.adaptiveQuizPrompt
+        .replaceAll('{referenceText}', referenceText)
+        .replaceAll('{quizType}', type)
+        .replaceAll('{previousMistakes}', mistakes);
+
+    try {
+      final response = await _dio.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        data: {
+          'model': 'llama-3.3-70b-versatile',
+          'messages': [
+            {'role': 'user', 'content': prompt}
+          ],
+          'temperature': 0.1,
+        },
+      );
+
+      final content = response.data['choices'][0]['message']['content'] as String;
+      await _trackUsage('Groq', prompt, content);
+      
+      final cleanJson = content.replaceAll('```json', '').replaceAll('```', '').trim();
+      final List<dynamic> decoded = jsonDecode(cleanJson);
+      return decoded.map((e) => e as Map<String, dynamic>).toList();
+    } catch (e) {
+      throw Exception('Groq Adaptive Quiz Hatası: $e');
     }
   }
 }
@@ -109,6 +204,11 @@ class OpenAiService implements AiService {
   OpenAiService({required this.apiKey}) {
     _dio.options.headers['Authorization'] = 'Bearer $apiKey';
     _dio.options.headers['Content-Type'] = 'application/json';
+  }
+
+  Future<void> _trackUsage(String provider, String prompt, String response) async {
+    final tokens = (prompt.length + response.length) ~/ 4;
+    await DatabaseService.instance.incrementTokenUsage(provider, tokens, );
   }
 
   @override
@@ -137,6 +237,8 @@ class OpenAiService implements AiService {
       );
 
       final content = response.data['choices'][0]['message']['content'] as String;
+      await _trackUsage('OpenAI', prompt, content);
+      
       return AiReport.fromJson(jsonDecode(content));
     } catch (e) {
       throw Exception('OpenAI API Hatası: $e');
@@ -177,9 +279,86 @@ class OpenAiService implements AiService {
         },
       );
 
-      return response.data['choices'][0]['message']['content'] as String;
+      final content = response.data['choices'][0]['message']['content'] as String;
+      final fullPrompt = messages.map((m) => m['content']).join('\n');
+      await _trackUsage('OpenAI', fullPrompt, content);
+      
+      return content;
     } catch (e) {
       throw Exception('OpenAI Chat Hatası: $e');
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> generateQuiz({
+    required String referenceText,
+    required String type,
+  }) async {
+    String promptTemplate;
+    if (type == 'test') {
+      promptTemplate = Prompts.testPrompt;
+    } else if (type == 'classic') {
+      promptTemplate = Prompts.classicPrompt;
+    } else {
+      promptTemplate = Prompts.flashcardPrompt;
+    }
+
+    final prompt = promptTemplate.replaceAll('{referenceText}', referenceText);
+
+    try {
+      final response = await _dio.post(
+        'https://api.openai.com/v1/chat/completions',
+        data: {
+          'model': 'gpt-4o',
+          'messages': [
+            {'role': 'user', 'content': prompt}
+          ],
+          'temperature': 0.1,
+        },
+      );
+
+      final content = response.data['choices'][0]['message']['content'] as String;
+      await _trackUsage('OpenAI', prompt, content);
+      
+      final cleanJson = content.replaceAll('```json', '').replaceAll('```', '').trim();
+      final List<dynamic> decoded = jsonDecode(cleanJson);
+      return decoded.map((e) => e as Map<String, dynamic>).toList();
+    } catch (e) {
+      throw Exception('OpenAI Quiz Hatası: $e');
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> generateAdaptiveQuiz({
+    required String referenceText,
+    required String type,
+    required String mistakes,
+  }) async {
+    final prompt = Prompts.adaptiveQuizPrompt
+        .replaceAll('{referenceText}', referenceText)
+        .replaceAll('{quizType}', type)
+        .replaceAll('{previousMistakes}', mistakes);
+
+    try {
+      final response = await _dio.post(
+        'https://api.openai.com/v1/chat/completions',
+        data: {
+          'model': 'gpt-4o',
+          'messages': [
+            {'role': 'user', 'content': prompt}
+          ],
+          'temperature': 0.1,
+        },
+      );
+
+      final content = response.data['choices'][0]['message']['content'] as String;
+      await _trackUsage('OpenAI', prompt, content);
+      
+      final cleanJson = content.replaceAll('```json', '').replaceAll('```', '').trim();
+      final List<dynamic> decoded = jsonDecode(cleanJson);
+      return decoded.map((e) => e as Map<String, dynamic>).toList();
+    } catch (e) {
+      throw Exception('OpenAI Adaptive Quiz Hatası: $e');
     }
   }
 }
@@ -194,6 +373,11 @@ class GeminiAiService implements AiService {
       apiKey: apiKey,
       generationConfig: GenerationConfig(temperature: 0.1),
     );
+  }
+
+  Future<void> _trackUsage(String provider, String prompt, String response) async {
+    final tokens = (prompt.length + response.length) ~/ 4;
+    await DatabaseService.instance.incrementTokenUsage(provider, tokens, );
   }
 
   @override
@@ -211,6 +395,8 @@ class GeminiAiService implements AiService {
     try {
       final response = await _model.generateContent([Content.text(prompt)]);
       final content = response.text ?? '{}';
+      await _trackUsage('Gemini', prompt, content);
+      
       final cleanJson = content.replaceAll('```json', '').replaceAll('```', '').trim();
       return AiReport.fromJson(jsonDecode(cleanJson));
     } catch (e) {
@@ -242,9 +428,68 @@ class GeminiAiService implements AiService {
 
     try {
       final response = await chatSession.sendMessage(Content.text(message));
-      return response.text ?? '';
+      final responseText = response.text ?? '';
+      
+      final historyText = chatHistory.map((e) => e.parts.map((p) => (p as TextPart).text).join('\n')).join('\n');
+      final fullPrompt = '$systemPrompt\n$historyText\n$message';
+      await _trackUsage('Gemini', fullPrompt, responseText);
+      
+      return responseText;
     } catch (e) {
       throw Exception('Gemini Chat Hatası: $e');
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> generateQuiz({
+    required String referenceText,
+    required String type,
+  }) async {
+    String promptTemplate;
+    if (type == 'test') {
+      promptTemplate = Prompts.testPrompt;
+    } else if (type == 'classic') {
+      promptTemplate = Prompts.classicPrompt;
+    } else {
+      promptTemplate = Prompts.flashcardPrompt;
+    }
+
+    final prompt = promptTemplate.replaceAll('{referenceText}', referenceText);
+
+    try {
+      final response = await _model.generateContent([Content.text(prompt)]);
+      final content = response.text ?? '[]';
+      await _trackUsage('Gemini', prompt, content);
+      
+      final cleanJson = content.replaceAll('```json', '').replaceAll('```', '').trim();
+      final List<dynamic> decoded = jsonDecode(cleanJson);
+      return decoded.map((e) => e as Map<String, dynamic>).toList();
+    } catch (e) {
+      throw Exception('Gemini Quiz Hatası: $e');
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> generateAdaptiveQuiz({
+    required String referenceText,
+    required String type,
+    required String mistakes,
+  }) async {
+    final prompt = Prompts.adaptiveQuizPrompt
+        .replaceAll('{referenceText}', referenceText)
+        .replaceAll('{quizType}', type)
+        .replaceAll('{previousMistakes}', mistakes);
+
+    try {
+      final response = await _model.generateContent([Content.text(prompt)]);
+      final content = response.text ?? '[]';
+      await _trackUsage('Gemini', prompt, content);
+      
+      final cleanJson = content.replaceAll('```json', '').replaceAll('```', '').trim();
+      final List<dynamic> decoded = jsonDecode(cleanJson);
+      return decoded.map((e) => e as Map<String, dynamic>).toList();
+    } catch (e) {
+      throw Exception('Gemini Adaptive Quiz Hatası: $e');
     }
   }
 }

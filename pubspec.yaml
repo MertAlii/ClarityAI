@@ -31,7 +31,7 @@ dependencies:
   syncfusion_flutter_pdf: ^28.1.33
 
   # File Picker
-  file_picker: ^8.1.7
+  file_picker: ^11.0.2
 
   # AI - Cloud
   google_generative_ai: ^0.4.6
@@ -50,6 +50,8 @@ dependencies:
   intl: ^0.19.0
   uuid: ^4.5.1
   permission_handler: ^11.3.1
+  url_launcher: ^6.3.2
+  flutter_markdown: ^0.7.7+1
 
 dev_dependencies:
   flutter_test:
