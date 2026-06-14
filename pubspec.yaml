@@ -1,0 +1,60 @@
+name: clarity_ai
+description: "Feynman Tekniği tabanlı AI destekli öğrenme asistanı"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.6.1
+
+  # Navigation
+  go_router: ^14.8.1
+
+  # HTTP & API
+  dio: ^5.7.0
+  json_annotation: ^4.9.0
+
+  # Database
+  sqflite: ^2.4.2
+  path_provider: ^2.1.5
+
+  # Speech & Audio
+  speech_to_text: ^7.0.0
+
+  # PDF Parsing
+  syncfusion_flutter_pdf: ^28.1.33
+
+  # File Picker
+  file_picker: ^8.1.7
+
+  # AI - Cloud
+  google_generative_ai: ^0.4.6
+
+  # Storage & Persistence
+  flutter_secure_storage: ^9.2.4
+  shared_preferences: ^2.3.5
+
+  # UI & Animation
+  smooth_page_indicator: ^1.2.0+3
+  flutter_animate: ^4.5.2
+  google_fonts: ^6.2.1
+  lucide_icons: ^0.257.0
+
+  # Utilities
+  intl: ^0.19.0
+  uuid: ^4.5.1
+  permission_handler: ^11.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
