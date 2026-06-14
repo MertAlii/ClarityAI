@@ -9,8 +9,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:clarity_ai/core/services/database_service.dart';
 import 'package:clarity_ai/core/services/ai_service.dart';
-import 'package:clarity_ai/models/v2_models.dart' as v2;
-import 'package:clarity_ai/core/models/note.dart' as old;
+import 'package:clarity_ai/models/v2_models.dart';
+
 
 class ChatDetailPage extends ConsumerStatefulWidget {
   final String sessionId;
@@ -21,7 +21,7 @@ class ChatDetailPage extends ConsumerStatefulWidget {
 }
 
 class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
-  final List<v2.ChatMessage> _messages = [];
+  final List<ChatMessage> _messages = [];
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
@@ -73,7 +73,7 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     HapticFeedback.lightImpact();
     _textController.clear();
     
-    final userMsg = v2.ChatMessage(
+    final userMsg = ChatMessage(
       id: const Uuid().v4(),
       sessionId: widget.sessionId,
       content: text,
@@ -92,21 +92,12 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     try {
       final v2Notes = await DatabaseService.instance.getAllNotes();
       
-      final oldNotes = v2Notes.map((n) => old.Note(
-        id: n.id,
-        title: n.title,
-        referenceText: '', // Placeholder, V3 logic splits contents differently
-        transcript: '',
-        score: n.score ?? 0,
-        targetAudience: n.targetAudience,
-      )).toList();
-
       final responseText = await _aiService!.chat(
         message: text,
-        userNotes: oldNotes,
+        userNotes: v2Notes,
       );
 
-      final aiMsg = v2.ChatMessage(
+      final aiMsg = ChatMessage(
         id: const Uuid().v4(),
         sessionId: widget.sessionId,
         content: responseText,

@@ -9,6 +9,10 @@ import 'package:clarity_ai/core/widgets/floating_navbar.dart';
 import 'package:clarity_ai/core/widgets/glass_card.dart';
 import 'package:clarity_ai/core/providers/data_providers.dart';
 import 'package:clarity_ai/models/v2_models.dart';
+import 'package:clarity_ai/features/calendar/presentation/calendar_page.dart';
+import 'package:clarity_ai/features/chat/presentation/chat_sessions_page.dart';
+import 'package:clarity_ai/features/settings/presentation/settings_page.dart';
+import 'package:clarity_ai/core/widgets/create_folder_dialog.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -22,9 +26,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
   final List<Widget> _tabs = [
     const _HomeTab(),
-    const Center(child: Text("Takvim ve Etkinlikler")),
-    const Center(child: Text("Sohbet")),
-    const Center(child: Text("Ayarlar")),
+    const CalendarPage(),
+    const ChatSessionsPage(),
+    const SettingsPage(),
   ];
 
   @override
@@ -122,13 +126,24 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                       children: [
                         Row(
                           children: [
-                            const Icon(LucideIcons.clock, size: 16, color: AppColors.streakOrange),
+                            const Icon(LucideIcons.fileText, size: 16, color: AppColors.streakOrange),
                             const SizedBox(width: 8),
-                            Text("Bugün Çalışılan", style: AppTextStyles.caption.copyWith(color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
+                            Text("Bugün Notlar", style: AppTextStyles.caption.copyWith(color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Text("45 dk", style: AppTextStyles.headline3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)),
+                        notesAsync.when(
+                          data: (notes) {
+                            final todayNotes = notes.where((n) {
+                              final date = n.createdAt;
+                              final now = DateTime.now();
+                              return date.year == now.year && date.month == now.month && date.day == now.day;
+                            }).length;
+                            return Text("$todayNotes Not", style: AppTextStyles.headline3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary));
+                          },
+                          loading: () => const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+                          error: (_, __) => Text("-", style: AppTextStyles.headline3.copyWith(color: AppColors.error)),
+                        )
                       ],
                     ),
                   ),
@@ -148,7 +163,19 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Text("3 Gün", style: AppTextStyles.headline3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)),
+                        ref.watch(eventsProvider).when(
+                          data: (events) {
+                            final sorted = List<Event>.from(events)..sort((a, b) => DateTime.parse(a.dateStr).compareTo(DateTime.parse(b.dateStr)));
+                            final upcoming = sorted.where((e) => DateTime.parse(e.dateStr).isAfter(DateTime.now().subtract(const Duration(days: 1)))).toList();
+                            if (upcoming.isEmpty) {
+                              return Text("Yok", style: AppTextStyles.headline3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary));
+                            }
+                            final diff = DateTime.parse(upcoming.first.dateStr).difference(DateTime.now()).inDays;
+                            return Text("${diff == 0 ? 'Bugün' : '$diff Gün'}", style: AppTextStyles.headline3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary));
+                          },
+                          loading: () => const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+                          error: (_, __) => Text("-", style: AppTextStyles.headline3.copyWith(color: AppColors.error)),
+                        )
                       ],
                     ),
                   ),
@@ -249,7 +276,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                         return GestureDetector(
                           onTap: () {
                             HapticFeedback.lightImpact();
-                            // Yeni klasör oluşturma işlemi buraya eklenecek
+                            showCreateFolderDialog(context, ref);
                           },
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),

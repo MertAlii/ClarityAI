@@ -10,6 +10,7 @@ import 'package:clarity_ai/core/services/database_service.dart';
 import 'package:clarity_ai/models/v2_models.dart';
 import 'package:clarity_ai/core/providers/data_providers.dart';
 import 'package:clarity_ai/core/widgets/glass_card.dart';
+import 'package:clarity_ai/core/widgets/create_folder_dialog.dart';
 
 class NoteCreationPage extends ConsumerStatefulWidget {
   const NoteCreationPage({super.key});
@@ -123,26 +124,39 @@ class _NoteCreationPageState extends ConsumerState<NoteCreationPage> {
                   const SizedBox(height: 8),
                   foldersAsync.when(
                     data: (folders) {
-                      return DropdownButtonFormField<Folder>(
-                        value: _selectedFolder,
-                        decoration: InputDecoration(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        hint: const Text('Klasör Seçin'),
-                        items: [
-                          const DropdownMenuItem<Folder>(
-                            value: null,
-                            child: Text('Klasör Yok'),
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<Folder>(
+                              value: _selectedFolder,
+                              decoration: InputDecoration(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              hint: const Text('Klasör Seçin'),
+                              items: [
+                                const DropdownMenuItem<Folder>(
+                                  value: null,
+                                  child: Text('Klasör Yok'),
+                                ),
+                                ...folders.map((f) => DropdownMenuItem(
+                                  value: f,
+                                  child: Text(f.name),
+                                ))
+                              ],
+                              onChanged: (val) {
+                                setState(() => _selectedFolder = val);
+                              },
+                            ),
                           ),
-                          ...folders.map((f) => DropdownMenuItem(
-                            value: f,
-                            child: Text(f.name),
-                          ))
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(LucideIcons.folderPlus),
+                            onPressed: () {
+                              showCreateFolderDialog(context, ref);
+                            },
+                          ),
                         ],
-                        onChanged: (val) {
-                          setState(() => _selectedFolder = val);
-                        },
                       );
                     },
                     loading: () => const CircularProgressIndicator(),

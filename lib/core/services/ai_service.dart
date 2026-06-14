@@ -85,7 +85,7 @@ class GroqAiService implements AiService {
     required List<Note> userNotes,
     List<ChatMessage>? history,
   }) async {
-    final notesContext = userNotes.map((n) => "Not #${n.id}: ${n.title}\n${n.referenceText.substring(0, n.referenceText.length > 500 ? 500 : n.referenceText.length)}").join("\n\n");
+    final notesContext = userNotes.map((n) => "Not #${n.id}: ${n.title}\n").join("\n\n");
     final systemPrompt = Prompts.chatPrompt.replaceAll('{notesContext}', notesContext);
 
     final messages = [
@@ -95,7 +95,7 @@ class GroqAiService implements AiService {
     if (history != null) {
       for (var msg in history) {
         messages.add({
-          'role': msg.isUser ? 'user' : 'assistant',
+          'role': msg.isUser == 1 ? 'user' : 'assistant',
           'content': msg.content,
         });
       }
@@ -251,7 +251,7 @@ class OpenAiService implements AiService {
     required List<Note> userNotes,
     List<ChatMessage>? history,
   }) async {
-    final notesContext = userNotes.map((n) => "Not #${n.id}: ${n.title}\n${n.referenceText.substring(0, n.referenceText.length > 500 ? 500 : n.referenceText.length)}").join("\n\n");
+    final notesContext = userNotes.map((n) => "Not #${n.id}: ${n.title}\n").join("\n\n");
     final systemPrompt = Prompts.chatPrompt.replaceAll('{notesContext}', notesContext);
 
     final messages = [
@@ -261,7 +261,7 @@ class OpenAiService implements AiService {
     if (history != null) {
       for (var msg in history) {
         messages.add({
-          'role': msg.isUser ? 'user' : 'assistant',
+          'role': msg.isUser == 1 ? 'user' : 'assistant',
           'content': msg.content,
         });
       }
@@ -410,7 +410,7 @@ class GeminiAiService implements AiService {
     required List<Note> userNotes,
     List<ChatMessage>? history,
   }) async {
-    final notesContext = userNotes.map((n) => "Not #${n.id}: ${n.title}\n${n.referenceText.substring(0, n.referenceText.length > 500 ? 500 : n.referenceText.length)}").join("\n\n");
+    final notesContext = userNotes.map((n) => "Not #${n.id}: ${n.title}\n").join("\n\n");
     final systemPrompt = Prompts.chatPrompt.replaceAll('{notesContext}', notesContext);
 
     final geminiModel = GenerativeModel(
@@ -421,7 +421,7 @@ class GeminiAiService implements AiService {
     );
 
     final chatHistory = history?.map((m) {
-      return Content(m.isUser ? 'user' : 'model', [TextPart(m.content)]);
+      return Content(m.isUser == 1 ? 'user' : 'model', [TextPart(m.content)]);
     }).toList() ?? [];
 
     final chatSession = geminiModel.startChat(history: chatHistory);

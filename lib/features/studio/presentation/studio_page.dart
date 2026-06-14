@@ -107,7 +107,7 @@ class _StudioPageState extends State<StudioPage> with SingleTickerProviderStateM
         aiService = GeminiAiService(apiKey: key);
       }
 
-      final materials = await DatabaseService.instance.getNoteMaterials(widget.noteId);
+      final materials = await DatabaseService.instance.getMaterialsForNote(widget.noteId);
       final referenceText = materials.map((m) => m.content).join('\n\n');
 
       final report = await aiService.analyzeExplanation(
