@@ -119,7 +119,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
               final ev = sortedEvents[index];
               final date = DateTime.parse(ev.dateStr);
               final diff = date.difference(DateTime.now()).inDays;
-              final color = Color(int.parse(ev.colorHex.replaceFirst('#', '0xFF')));
+              final color = Color(int.parse((ev.colorHex ?? '#EAB308').replaceFirst('#', '0xFF')));
 
               return GlassCard(
                 margin: const EdgeInsets.only(bottom: 12),
