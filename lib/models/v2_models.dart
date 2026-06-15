@@ -346,4 +346,11 @@ class AiReport {
     jargon: json['jargon'] ?? [],
     analogies: json['analogies'] ?? [],
   );
+
+  Map<String, dynamic> toJson() => {
+    'score': score,
+    'gaps': gaps,
+    'jargon': jargon,
+    'analogies': analogies,
+  };
 }

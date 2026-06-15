@@ -444,12 +444,35 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
       ],
     );
 
-    return GlassCard(
-      margin: isGrid ? EdgeInsets.zero : const EdgeInsets.only(bottom: 12),
-      onTap: () {
-        context.push('/note/${note.id}');
+    return Dismissible(
+      key: ValueKey('note_${note.id}'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: isGrid ? EdgeInsets.zero : const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: AppColors.error,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(LucideIcons.trash, color: Colors.white),
+      ),
+      onDismissed: (_) async {
+        await DatabaseService.instance.deleteNote(note.id!);
+        ref.invalidate(notesProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Not başarıyla silindi.')),
+          );
+        }
       },
-      child: content,
+      child: GlassCard(
+        margin: isGrid ? EdgeInsets.zero : const EdgeInsets.only(bottom: 12),
+        onTap: () {
+          context.push('/note/${note.id}');
+        },
+        child: content,
+      ),
     );
   }
 

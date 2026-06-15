@@ -171,8 +171,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                     String displayContent = msg.content;
                     if (!isUser) {
                       displayContent = displayContent.replaceAllMapped(
-                        RegExp(r'@\[\[(.*?)\|(.*?)\]\]'),
-                        (match) => '[${match.group(1)}](/note/${match.group(2)})'
+                        RegExp(r'\[\[(.*?)\|(.*?)\]\]'),
+                        (match) => '[${match.group(1)}](/note_detail/${match.group(2)})'
                       );
                     }
 

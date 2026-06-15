@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -122,12 +123,11 @@ class _StudioPageState extends State<StudioPage> with SingleTickerProviderStateM
         createdAt: DateTime.now(),
       ));
 
-      // Since we simulate storing the JSON report in the db (or passing it via state in a real app, 
-      // but here we just navigate and let ReportPage fetch the note. Wait, ReportPage needs the full report. 
-      // In MVP we can encode the report into the transcript field or a new DB column. 
-      // Since schema is fixed, let's just navigate. We actually only saved score to DB. 
-      // For MVP, ReportPage will re-analyze OR we can pass the report. 
-      // Let's pass the report via GoRouter extra.
+      await DatabaseService.instance.insertAiReport(AiReportData(
+        noteId: _note!.id!,
+        content: jsonEncode(report.toJson()),
+        createdAt: DateTime.now(),
+      ));
       
       setState(() => _isAnalyzing = false);
       if (mounted) {

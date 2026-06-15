@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +24,8 @@ class _SetupPageState extends ConsumerState<SetupPage> {
   String _name = '';
   String _selectedProvider = '';
   String _apiKey = '';
+  String _ollamaEndpoint = 'http://10.0.2.2:11434';
+  String _ollamaModel = 'llama3';
 
   void _nextStep() {
     HapticFeedback.lightImpact();
@@ -39,6 +42,7 @@ class _SetupPageState extends ConsumerState<SetupPage> {
 
   Future<void> _finishSetup() async {
     final storage = StorageService();
+    final prefs = await SharedPreferences.getInstance();
     
     // Save User Profile
     await storage.saveUserProfile(UserProfile(
@@ -49,8 +53,14 @@ class _SetupPageState extends ConsumerState<SetupPage> {
       themeMode: _selectedTheme,
     ));
 
-    // Save API Key
-    await storage.saveApiKey(_selectedProvider, _apiKey);
+    // Save API Key & Ollama settings
+    if (_selectedProvider == 'Ollama') {
+      await prefs.setString('ollama_endpoint', _ollamaEndpoint.trim());
+      await prefs.setString('ollama_model', _ollamaModel.trim());
+    } else {
+      await storage.saveApiKey(_selectedProvider, _apiKey.trim());
+    }
+    await prefs.setString('ai_provider', _selectedProvider);
 
     // Apply Theme
     final themeMode = switch (_selectedTheme) {
@@ -183,42 +193,22 @@ class _SetupPageState extends ConsumerState<SetupPage> {
           const SizedBox(height: 32),
           Text('Bulut Çözümleri', style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.5))),
           const SizedBox(height: 16),
-          _buildAiOption('groq', '🚀 Groq (Llama 3 - Hızlı)'),
+          _buildAiOption('Groq', '🚀 Groq (Llama 3 - Hızlı)'),
           const SizedBox(height: 12),
-          _buildAiOption('openai', '🧠 OpenAI (GPT-4o)'),
+          _buildAiOption('OpenAI', '🧠 OpenAI (GPT-4o)'),
           const SizedBox(height: 12),
-          _buildAiOption('gemini', '✨ Google Gemini'),
+          _buildAiOption('Gemini', '✨ Google Gemini'),
           
           const SizedBox(height: 32),
-          Text('Yerel Çözümler (Yakında)', style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.5))),
+          Text('Yerel Çözümler', style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.5))),
           const SizedBox(height: 16),
-          Opacity(
-            opacity: 0.5,
-            child: GlassCard(
-              child: Row(
-                children: [
-                  const Text('📱 Telefonda Çalıştır'),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Opacity(
-            opacity: 0.5,
-            child: GlassCard(
-              child: Row(
-                children: [
-                  const Text('💻 Kendi Sunucum'),
-                ],
-              ),
-            ),
-          ),
+          _buildAiOption('Ollama', '💻 Kendi Sunucum (Ollama)'),
           
           const SizedBox(height: 48),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: (_selectedProvider.isNotEmpty && _apiKey.isNotEmpty) ? _nextStep : null,
+              onPressed: (_selectedProvider.isNotEmpty && (_selectedProvider == 'Ollama' ? (_ollamaEndpoint.isNotEmpty && _ollamaModel.isNotEmpty) : _apiKey.isNotEmpty)) ? _nextStep : null,
               child: const Text('Kaydet ve Başla'),
             ),
           ),
@@ -250,14 +240,34 @@ class _SetupPageState extends ConsumerState<SetupPage> {
           ),
           if (isSelected) ...[
             const SizedBox(height: 16),
-            TextField(
-              onChanged: (val) => setState(() => _apiKey = val),
-              obscureText: true,
-              decoration: InputDecoration(
-                hintText: '$id API Anahtarını Girin',
-                prefixIcon: const Icon(LucideIcons.key),
+            if (id == 'Ollama') ...[
+              TextField(
+                onChanged: (val) => setState(() => _ollamaEndpoint = val),
+                decoration: InputDecoration(
+                  hintText: 'Endpoint (Örn: http://10.0.2.2:11434)',
+                  prefixIcon: const Icon(LucideIcons.link),
+                ),
+                controller: TextEditingController(text: _ollamaEndpoint),
               ),
-            ),
+              const SizedBox(height: 12),
+              TextField(
+                onChanged: (val) => setState(() => _ollamaModel = val),
+                decoration: InputDecoration(
+                  hintText: 'Model Adı (Örn: llama3)',
+                  prefixIcon: const Icon(LucideIcons.box),
+                ),
+                controller: TextEditingController(text: _ollamaModel),
+              ),
+            ] else ...[
+              TextField(
+                onChanged: (val) => setState(() => _apiKey = val),
+                obscureText: true,
+                decoration: InputDecoration(
+                  hintText: '$id API Anahtarını Girin',
+                  prefixIcon: const Icon(LucideIcons.key),
+                ),
+              ),
+            ]
           ]
         ],
       ),
