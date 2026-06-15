@@ -125,7 +125,9 @@ class _StudioPageState extends State<StudioPage> with SingleTickerProviderStateM
 
       await DatabaseService.instance.insertAiReport(AiReportData(
         noteId: _note!.id!,
-        content: jsonEncode(report.toJson()),
+        type: 'analysis',
+        contentJson: jsonEncode(report.toJson()),
+        score: report.score,
         createdAt: DateTime.now(),
       ));
       
