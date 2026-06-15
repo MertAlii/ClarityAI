@@ -32,7 +32,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
-        _selectedProvider = prefs.getString('ai_provider') ?? 'Groq';
+        final savedProvider = (prefs.getString('ai_provider') ?? 'Groq').toLowerCase();
+        if (savedProvider == 'openai') _selectedProvider = 'OpenAI';
+        else if (savedProvider == 'gemini') _selectedProvider = 'Gemini';
+        else if (savedProvider == 'ollama') _selectedProvider = 'Ollama';
+        else _selectedProvider = 'Groq';
+
         _apiKeyController.text = prefs.getString('ai_api_key') ?? '';
         _endpointController.text = prefs.getString('ollama_endpoint') ?? 'http://10.0.2.2:11434';
         _modelController.text = prefs.getString('ollama_model') ?? 'llama3';
