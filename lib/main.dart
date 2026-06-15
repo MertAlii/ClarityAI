@@ -24,7 +24,15 @@ void main() async {
 }
 
 /// Global theme mode notifier for runtime theme switching
-final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.dark);
+class ThemeModeNotifier extends Notifier<ThemeMode> {
+  @override
+  ThemeMode build() => ThemeMode.dark;
+  void setMode(ThemeMode mode) => state = mode;
+}
+
+final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(() {
+  return ThemeModeNotifier();
+});
 
 class ClarityApp extends ConsumerStatefulWidget {
   final GoRouter router;
@@ -51,7 +59,7 @@ class _ClarityAppState extends ConsumerState<ClarityApp> {
         'light' => ThemeMode.light,
         _ => ThemeMode.system,
       };
-      ref.read(themeModeProvider.notifier).state = mode;
+      ref.read(themeModeProvider.notifier).setMode(mode);
     });
   }
 
