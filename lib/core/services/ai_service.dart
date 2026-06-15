@@ -493,3 +493,171 @@ class GeminiAiService implements AiService {
     }
   }
 }
+
+class OllamaAiService implements AiService {
+  final String endpoint;
+  final String model;
+  final Dio _dio = Dio();
+
+  OllamaAiService({required this.endpoint, required this.model}) {
+    _dio.options.headers['Content-Type'] = 'application/json';
+  }
+
+  Future<void> _trackUsage(String provider, String prompt, String response) async {
+    final tokens = (prompt.length + response.length) ~/ 4;
+    await DatabaseService.instance.incrementTokenUsage(provider, tokens);
+  }
+
+  @override
+  Future<AiReport> analyzeExplanation({
+    required String referenceText,
+    required String transcript,
+    required String targetAudience,
+  }) async {
+    final audienceLabel = Prompts.audienceLabels[targetAudience] ?? targetAudience;
+    final prompt = Prompts.feynmanAnalysisPrompt
+        .replaceAll('{referenceText}', referenceText)
+        .replaceAll('{transcript}', transcript)
+        .replaceAll('{audience}', audienceLabel);
+
+    try {
+      final response = await _dio.post(
+        '$endpoint/v1/chat/completions',
+        data: {
+          'model': model,
+          'response_format': {'type': 'json_object'},
+          'messages': [
+            {'role': 'user', 'content': prompt}
+          ],
+          'temperature': 0.1,
+        },
+      );
+
+      final content = response.data['choices'][0]['message']['content'] as String;
+      await _trackUsage('Ollama ($model)', prompt, content);
+      
+      final cleanJson = content.replaceAll('```json', '').replaceAll('```', '').trim();
+      return AiReport.fromJson(jsonDecode(cleanJson));
+    } catch (e) {
+      throw Exception('Ollama API Hatası: $e');
+    }
+  }
+
+  @override
+  Future<String> chat({
+    required String message,
+    required List<Note> userNotes,
+    List<ChatMessage>? history,
+  }) async {
+    final notesContext = userNotes.map((n) => "Not #${n.id}: ${n.title}\n").join("\n\n");
+    final systemPrompt = Prompts.chatPrompt.replaceAll('{notesContext}', notesContext);
+
+    final messages = [
+      {'role': 'system', 'content': systemPrompt},
+    ];
+
+    if (history != null) {
+      for (var msg in history) {
+        messages.add({
+          'role': msg.isUser == 1 ? 'user' : 'assistant',
+          'content': msg.content,
+        });
+      }
+    }
+
+    messages.add({'role': 'user', 'content': message});
+
+    try {
+      final response = await _dio.post(
+        '$endpoint/v1/chat/completions',
+        data: {
+          'model': model,
+          'messages': messages,
+          'temperature': 0.7,
+        },
+      );
+
+      final content = response.data['choices'][0]['message']['content'] as String;
+      final fullPrompt = messages.map((m) => m['content']).join('\n');
+      await _trackUsage('Ollama ($model)', fullPrompt, content);
+      
+      return content;
+    } catch (e) {
+      throw Exception('Ollama Chat Hatası: $e');
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> generateQuiz({
+    required String referenceText,
+    required String type,
+  }) async {
+    String promptTemplate;
+    if (type == 'test') {
+      promptTemplate = Prompts.testPrompt;
+    } else if (type == 'classic') {
+      promptTemplate = Prompts.classicPrompt;
+    } else {
+      promptTemplate = Prompts.flashcardPrompt;
+    }
+
+    final prompt = promptTemplate.replaceAll('{referenceText}', referenceText);
+
+    try {
+      final response = await _dio.post(
+        '$endpoint/v1/chat/completions',
+        data: {
+          'model': model,
+          'messages': [
+            {'role': 'user', 'content': prompt}
+          ],
+          'temperature': 0.1,
+        },
+      );
+
+      final content = response.data['choices'][0]['message']['content'] as String;
+      await _trackUsage('Ollama ($model)', prompt, content);
+      
+      final cleanJson = content.replaceAll('```json', '').replaceAll('```', '').trim();
+      final List<dynamic> decoded = jsonDecode(cleanJson);
+      return decoded.map((e) => e as Map<String, dynamic>).toList();
+    } catch (e) {
+      throw Exception('Ollama Quiz Hatası: $e');
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> generateAdaptiveQuiz({
+    required String referenceText,
+    required String type,
+    required String mistakes,
+  }) async {
+    final prompt = Prompts.adaptiveQuizPrompt
+        .replaceAll('{referenceText}', referenceText)
+        .replaceAll('{quizType}', type)
+        .replaceAll('{previousMistakes}', mistakes);
+
+    try {
+      final response = await _dio.post(
+        '$endpoint/v1/chat/completions',
+        data: {
+          'model': model,
+          'messages': [
+            {'role': 'user', 'content': prompt}
+          ],
+          'temperature': 0.1,
+        },
+      );
+
+      final content = response.data['choices'][0]['message']['content'] as String;
+      await _trackUsage('Ollama ($model)', prompt, content);
+      
+      final cleanJson = content.replaceAll('```json', '').replaceAll('```', '').trim();
+      final List<dynamic> decoded = jsonDecode(cleanJson);
+      return decoded.map((e) => e as Map<String, dynamic>).toList();
+    } catch (e) {
+      throw Exception('Ollama Adaptive Quiz Hatası: $e');
+    }
+  }
+}
+

@@ -8,6 +8,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:clarity_ai/models/v2_models.dart';
+import 'package:clarity_ai/core/services/ai_factory.dart';
 import 'package:clarity_ai/core/services/database_service.dart';
 import 'package:clarity_ai/core/services/storage_service.dart';
 import 'package:clarity_ai/core/services/ai_service.dart';
@@ -35,21 +36,8 @@ class _NoteDetailPageState extends ConsumerState<NoteDetailPage> with SingleTick
   }
 
   Future<void> _initAiService() async {
-    final storage = StorageService();
-    final profile = await storage.getUserProfile();
-    if (profile != null) {
-      final key = await storage.getApiKey(profile.aiProvider);
-      if (key != null) {
-        if (profile.aiProvider == 'groq') {
-          _aiService = GroqAiService(apiKey: key);
-        } else if (profile.aiProvider == 'openai') {
-          _aiService = OpenAiService(apiKey: key);
-        } else if (profile.aiProvider == 'gemini') {
-          _aiService = GeminiAiService(apiKey: key);
-        }
-      }
-    }
-    setState(() {});
+    _aiService = await AiFactory.create();
+    if (mounted) setState(() {});
   }
 
   Future<void> _addMaterial(String type) async {

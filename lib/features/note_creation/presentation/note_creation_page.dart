@@ -93,7 +93,7 @@ class _NoteCreationPageState extends ConsumerState<NoteCreationPage> {
     setState(() => _isLoading = false);
 
     if (mounted) {
-      ref.invalidate(notesProvider(_selectedFolder?.id));
+      ref.invalidate(notesProvider);
       context.pushReplacement('/studio/$noteId');
     }
   }

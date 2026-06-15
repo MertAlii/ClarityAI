@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:clarity_ai/core/services/ai_factory.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -35,12 +36,13 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
     _initData();
   }
 
+  Future<void> _initChat() async {
+    _aiService = await AiFactory.create();
+    if (mounted) setState(() {});
+  }
+
   Future<void> _initData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final groqKey = prefs.getString('groq_api_key');
-    if (groqKey != null && groqKey.isNotEmpty) {
-      _aiService = GroqAiService(apiKey: groqKey);
-    } // OpenAi or Gemini parsing could be added if needed based on settings
+    await _initChat();
 
     final msgs = await DatabaseService.instance.getMessagesForSession(widget.sessionId);
     if (mounted) {
@@ -68,7 +70,17 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
-    if (text.isEmpty || _aiService == null) return;
+    if (text.isEmpty) return;
+
+    if (_aiService == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lütfen ayarlardan bir yapay zeka sağlayıcısı (Model) seçin.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
     
     HapticFeedback.lightImpact();
     _textController.clear();

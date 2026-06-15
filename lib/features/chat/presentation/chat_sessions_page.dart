@@ -24,24 +24,27 @@ class ChatSessionsPage extends ConsumerWidget {
         title: Text('Sohbetler', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF84CC16),
-        foregroundColor: Colors.black,
-        icon: const Icon(Icons.add),
-        label: Text('Yeni Sohbet', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-        onPressed: () async {
-          HapticFeedback.lightImpact();
-          final newSession = ChatSession(
-            id: const Uuid().v4(),
-            title: 'Yeni Sohbet',
-            createdAt: DateTime.now(),
-          );
-          await DatabaseService.instance.insertChatSession(newSession);
-          ref.invalidate(chatSessionsProvider);
-          if (context.mounted) {
-            context.push('/chat/${newSession.id}');
-          }
-        },
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 100.0),
+        child: FloatingActionButton.extended(
+          backgroundColor: const Color(0xFF84CC16),
+          foregroundColor: Colors.black,
+          icon: const Icon(Icons.add),
+          label: Text('Yeni Sohbet', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+          onPressed: () async {
+            HapticFeedback.lightImpact();
+            final newSession = ChatSession(
+              id: const Uuid().v4(),
+              title: 'Yeni Sohbet',
+              createdAt: DateTime.now(),
+            );
+            await DatabaseService.instance.insertChatSession(newSession);
+            ref.invalidate(chatSessionsProvider);
+            if (context.mounted) {
+              context.push('/chat/${newSession.id}');
+            }
+          },
+        ),
       ),
       body: sessionsAsync.when(
         data: (sessions) {

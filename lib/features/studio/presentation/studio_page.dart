@@ -7,6 +7,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:clarity_ai/core/services/database_service.dart';
+import 'package:clarity_ai/core/services/ai_factory.dart';
 import 'package:clarity_ai/core/services/storage_service.dart';
 import 'package:clarity_ai/core/services/ai_service.dart';
 import 'package:clarity_ai/models/v2_models.dart';
@@ -88,25 +89,19 @@ class _StudioPageState extends State<StudioPage> with SingleTickerProviderStateM
       return;
     }
 
+    final aiService = await AiFactory.create();
+    if (aiService == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Lütfen ayarlardan model veya API anahtarı seçin.')),
+        );
+      }
+      return;
+    }
+
     setState(() => _isAnalyzing = true);
 
     try {
-      final storage = StorageService();
-      final profile = await storage.getUserProfile();
-      if (profile == null) throw Exception('Profil bulunamadı');
-
-      final key = await storage.getApiKey(profile.aiProvider);
-      if (key == null) throw Exception('API Anahtarı bulunamadı');
-
-      AiService aiService;
-      if (profile.aiProvider == 'groq') {
-        aiService = GroqAiService(apiKey: key);
-      } else if (profile.aiProvider == 'openai') {
-        aiService = OpenAiService(apiKey: key);
-      } else {
-        aiService = GeminiAiService(apiKey: key);
-      }
-
       final materials = await DatabaseService.instance.getMaterialsForNote(widget.noteId);
       final referenceText = materials.map((m) => m.content).join('\n\n');
 
@@ -136,7 +131,7 @@ class _StudioPageState extends State<StudioPage> with SingleTickerProviderStateM
       
       setState(() => _isAnalyzing = false);
       if (mounted) {
-        context.pushReplacement('/report/${_note!.id}', extra: report);
+        context.pushReplacement('/note/${_note!.id}');
       }
     } catch (e) {
       setState(() => _isAnalyzing = false);
