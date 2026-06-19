@@ -28,7 +28,7 @@ KAYNAK METİN:
 {referenceText}
 
 Kurallar:
-1. En az 5, en fazla 10 adet soru oluştur.
+1. {count} adet ve {difficulty} zorluk seviyesinde soru oluştur.
 2. Sorular net, cevaplar ise akılda kalıcı ve kısa (maksimum 2-3 cümle) olmalı.
 3. Çıktıyı SADECE aşağıdaki JSON formatında ver, markdown veya başka bir metin ekleme:
 [
@@ -44,7 +44,7 @@ KAYNAK METİN:
 {referenceText}
 
 Kurallar:
-1. En az 5 adet çoktan seçmeli soru oluştur.
+1. {count} adet ve {difficulty} zorluk seviyesinde çoktan seçmeli soru oluştur.
 2. Her soru için 4 veya 5 seçenek (options) belirle.
 3. Çıktıyı SADECE aşağıdaki JSON formatında ver, markdown veya başka bir metin ekleme:
 [
@@ -64,7 +64,7 @@ KAYNAK METİN:
 {referenceText}
 
 Kurallar:
-1. En az 5 adet klasik soru oluştur.
+1. {count} adet ve {difficulty} zorluk seviyesinde klasik soru oluştur.
 2. Öğrencinin yanıtında geçmesi beklenen anahtar kelimeleri (expectedAnswerKeyword) belirle.
 3. Çıktıyı SADECE aşağıdaki JSON formatında ver, markdown veya başka bir metin ekleme:
 [

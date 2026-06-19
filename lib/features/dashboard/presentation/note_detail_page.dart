@@ -31,7 +31,7 @@ class _NoteDetailPageState extends ConsumerState<NoteDetailPage> with SingleTick
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 3, vsync: this, initialIndex: 1);
     _initAiService();
   }
 
@@ -129,34 +129,83 @@ class _NoteDetailPageState extends ConsumerState<NoteDetailPage> with SingleTick
       return;
     }
 
-    String? selectedType;
+    String? selectedType = 'test';
+    int questionCount = 5;
+    String difficulty = 'Orta';
+    bool confirmed = false;
+
     await showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Sınav Türü Seçin'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: const Text('Çoktan Seçmeli (Test)'),
-                onTap: () { selectedType = 'test'; Navigator.pop(ctx); },
+        return StatefulBuilder(
+          builder: (context, setStateSB) {
+            return AlertDialog(
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              title: Text('Sınav Üret', style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Sınav Türü', style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                  DropdownButton<String>(
+                    isExpanded: true,
+                    value: selectedType,
+                    dropdownColor: Theme.of(context).colorScheme.surfaceContainer,
+                    items: const [
+                      DropdownMenuItem(value: 'test', child: Text('Çoktan Seçmeli (Test)')),
+                      DropdownMenuItem(value: 'classic', child: Text('Klasik Soru')),
+                      DropdownMenuItem(value: 'flashcard', child: Text('Hafıza Kartı (Flashcard)')),
+                    ],
+                    onChanged: (v) => setStateSB(() => selectedType = v),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Soru Sayısı: $questionCount', style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                  Slider(
+                    value: questionCount.toDouble(),
+                    min: 3,
+                    max: 15,
+                    divisions: 12,
+                    activeColor: Theme.of(context).colorScheme.primary,
+                    label: questionCount.toString(),
+                    onChanged: (v) => setStateSB(() => questionCount = v.toInt()),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Zorluk Seviyesi', style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                  DropdownButton<String>(
+                    isExpanded: true,
+                    value: difficulty,
+                    dropdownColor: Theme.of(context).colorScheme.surfaceContainer,
+                    items: const [
+                      DropdownMenuItem(value: 'Kolay', child: Text('Kolay')),
+                      DropdownMenuItem(value: 'Orta', child: Text('Orta')),
+                      DropdownMenuItem(value: 'Zor', child: Text('Zor')),
+                      DropdownMenuItem(value: 'Uzman', child: Text('Uzman')),
+                    ],
+                    onChanged: (v) => setStateSB(() => difficulty = v!),
+                  ),
+                ],
               ),
-              ListTile(
-                title: const Text('Klasik Soru'),
-                onTap: () { selectedType = 'classic'; Navigator.pop(ctx); },
-              ),
-              ListTile(
-                title: const Text('Hafıza Kartı (Flashcard)'),
-                onTap: () { selectedType = 'flashcard'; Navigator.pop(ctx); },
-              ),
-            ],
-          ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                  onPressed: () {
+                    confirmed = true;
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Üret'),
+                ),
+              ],
+            );
+          }
         );
       }
     );
 
-    if (selectedType == null) return;
+    if (!confirmed || selectedType == null) return;
 
     setState(() => _isGeneratingQuiz = true);
     try {
@@ -166,7 +215,12 @@ class _NoteDetailPageState extends ConsumerState<NoteDetailPage> with SingleTick
       }
       final refText = materials.map((m) => m.content).join('\n\n');
 
-      final result = await _aiService!.generateQuiz(referenceText: refText, type: selectedType!);
+      final result = await _aiService!.generateQuiz(
+        referenceText: refText, 
+        type: selectedType!,
+        count: questionCount,
+        difficulty: difficulty,
+      );
       
       final quizData = QuizData(
         noteId: widget.noteId,
@@ -233,6 +287,21 @@ class _NoteDetailPageState extends ConsumerState<NoteDetailPage> with SingleTick
                   final mat = materials[index];
                   return GlassCard(
                     margin: const EdgeInsets.only(bottom: 12),
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          backgroundColor: Theme.of(context).colorScheme.surface,
+                          title: Text(mat.title, style: TextStyle(color: Theme.of(context).colorScheme.onSurface)),
+                          content: SingleChildScrollView(
+                            child: Text(mat.content, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                          ),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Kapat', style: TextStyle(color: Theme.of(context).colorScheme.primary))),
+                          ],
+                        ),
+                      );
+                    },
                     child: ListTile(
                       leading: Icon(mat.type == 'pdf' ? LucideIcons.fileText : LucideIcons.alignLeft),
                       title: Text(mat.title),
@@ -274,24 +343,95 @@ class _NoteDetailPageState extends ConsumerState<NoteDetailPage> with SingleTick
 
   Widget _buildReportsTab() {
     final reportsAsync = ref.watch(aiReportsProvider(widget.noteId));
+    final theme = Theme.of(context);
 
     return Column(
       children: [
         Expanded(
           child: reportsAsync.when(
             data: (reports) {
-              if (reports.isEmpty) return const Center(child: Text('Henüz analiz yok.'));
+              if (reports.isEmpty) {
+                return const Center(child: Text('Henüz analiz yok. Anlatıma başlayın.'));
+              }
+              
               return ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: reports.length,
                 itemBuilder: (context, index) {
-                  final report = reports[index];
+                  final reportData = reports[index];
+                  AiReport? reportObj;
+                  try {
+                    reportObj = AiReport.fromJson(jsonDecode(reportData.contentJson));
+                  } catch (_) {}
+
+                  if (reportObj == null) return const SizedBox();
+
+                  String labelText;
+                  Color labelColor;
+                  if (reportObj.score < 40) {
+                    labelText = "Daha fazla çalışman gerekiyor";
+                    labelColor = Colors.red;
+                  } else if (reportObj.score < 70) {
+                    labelText = "İyi gidiyorsun, biraz daha geliştir";
+                    labelColor = Colors.orange;
+                  } else {
+                    labelText = "Harika! Konuya hakimsin";
+                    labelColor = Colors.green;
+                  }
+
                   return GlassCard(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ListTile(
-                      leading: const Icon(LucideIcons.barChart2),
-                      title: Text('Analiz - ${report.createdAt.toLocal().toString().split('.')[0]}'),
-                      subtitle: Text('Skor: ${report.score?.toStringAsFixed(1) ?? "N/A"}'),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: EdgeInsets.zero,
+                    child: Theme(
+                      data: theme.copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        initiallyExpanded: index == 0,
+                        leading: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            CircularProgressIndicator(value: reportObj.score / 100, color: labelColor, backgroundColor: labelColor.withValues(alpha: 0.2)),
+                            Text("${reportObj.score.toInt()}", style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface, fontSize: 12)),
+                          ],
+                        ),
+                        title: Text('Analiz Raporu', style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface)),
+                        subtitle: Text('${reportData.createdAt.toLocal().toString().substring(0,16)} • $labelText', style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 12)),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(16).copyWith(top: 0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (reportObj.gaps.isNotEmpty) ...[
+                                  Text('Eksikler ve Hatalar', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                                  const SizedBox(height: 8),
+                                  ...reportObj.gaps.map((g) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Text('• ${g['title']}: ${g['detail']}', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+                                  )),
+                                  const SizedBox(height: 16),
+                                ],
+                                if (reportObj.jargon.isNotEmpty) ...[
+                                  Text('Jargon Filtresi', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange)),
+                                  const SizedBox(height: 8),
+                                  ...reportObj.jargon.map((j) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Text('• ${j['word']} -> Öneri: ${j['suggestion']}', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+                                  )),
+                                  const SizedBox(height: 16),
+                                ],
+                                if (reportObj.analogies.isNotEmpty) ...[
+                                  Text('Önerilen Analojiler', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                                  const SizedBox(height: 8),
+                                  ...reportObj.analogies.map((a) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Text('• ${a['topic']}: ${a['analogy']}', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+                                  )),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
@@ -339,7 +479,7 @@ class _NoteDetailPageState extends ConsumerState<NoteDetailPage> with SingleTick
                       } else if (quiz.type == 'test') {
                         context.push('/test_quiz', extra: quiz);
                       } else {
-                        // classic not fully implemented UI-wise, but route could be same or custom
+                        context.push('/classic_quiz', extra: quiz);
                       }
                     },
                     child: ListTile(

@@ -11,9 +11,12 @@ import 'package:clarity_ai/core/widgets/glass_card.dart';
 import 'package:clarity_ai/core/providers/data_providers.dart';
 import 'package:clarity_ai/models/v2_models.dart';
 import 'package:clarity_ai/features/calendar/presentation/calendar_page.dart';
+import 'package:clarity_ai/features/dashboard/presentation/note_detail_page.dart';
 import 'package:clarity_ai/features/chat/presentation/chat_sessions_page.dart';
 import 'package:clarity_ai/features/settings/presentation/settings_page.dart';
 import 'package:clarity_ai/core/widgets/create_folder_dialog.dart';
+import 'package:clarity_ai/core/widgets/floating_navbar.dart';
+
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -44,25 +47,13 @@ class _DashboardPageState extends State<DashboardPage> {
             index: _currentIndex,
             children: _tabs,
           ),
-          FloatingNavbar(
+          FloatingNavBar(
             currentIndex: _currentIndex,
             onTap: (index) {
               setState(() {
                 _currentIndex = index;
               });
             },
-            icons: const [
-              LucideIcons.home,
-              LucideIcons.calendar,
-              LucideIcons.messageCircle,
-              LucideIcons.settings,
-            ],
-            labels: const [
-              "Ana Sayfa",
-              "Takvim",
-              "Sohbet",
-              "Ayarlar",
-            ],
           ),
         ],
       ),
@@ -70,6 +61,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ? Padding(
               padding: const EdgeInsets.only(bottom: 100.0), // Navbar'ın üzerinde kalması için
               child: FloatingActionButton(
+                heroTag: null,
                 onPressed: () {
                   HapticFeedback.lightImpact();
                   context.push('/create');
@@ -140,10 +132,10 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                               final now = DateTime.now();
                               return date.year == now.year && date.month == now.month && date.day == now.day;
                             }).length;
-                            return Text("$todayNotes Not", style: AppTextStyles.headline3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary));
+                            return Text("$todayNotes Not", style: AppTextStyles.h3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary));
                           },
                           loading: () => const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2)),
-                          error: (_, __) => Text("-", style: AppTextStyles.headline3.copyWith(color: AppColors.error)),
+                          error: (_, __) => Text("-", style: AppTextStyles.h3.copyWith(color: AppColors.error)),
                         )
                       ],
                     ),
@@ -169,13 +161,13 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                             final sorted = List<Event>.from(events)..sort((a, b) => DateTime.parse(a.dateStr).compareTo(DateTime.parse(b.dateStr)));
                             final upcoming = sorted.where((e) => DateTime.parse(e.dateStr).isAfter(DateTime.now().subtract(const Duration(days: 1)))).toList();
                             if (upcoming.isEmpty) {
-                              return Text("Yok", style: AppTextStyles.headline3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary));
+                              return Text("Yok", style: AppTextStyles.h3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary));
                             }
                             final diff = DateTime.parse(upcoming.first.dateStr).difference(DateTime.now()).inDays;
-                            return Text("${diff == 0 ? 'Bugün' : '$diff Gün'}", style: AppTextStyles.headline3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary));
+                            return Text("${diff == 0 ? 'Bugün' : '$diff Gün'}", style: AppTextStyles.h3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary));
                           },
                           loading: () => const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2)),
-                          error: (_, __) => Text("-", style: AppTextStyles.headline3.copyWith(color: AppColors.error)),
+                          error: (_, __) => Text("-", style: AppTextStyles.h3.copyWith(color: AppColors.error)),
                         )
                       ],
                     ),
@@ -459,7 +451,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
         child: const Icon(LucideIcons.trash, color: Colors.white),
       ),
       onDismissed: (_) async {
-        await DatabaseService.instance.deleteNote(note.id!);
+        await DatabaseService.instance.deleteNoteWithRelations(note.id!);
         ref.invalidate(notesProvider);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -470,7 +462,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
       child: GlassCard(
         margin: isGrid ? EdgeInsets.zero : const EdgeInsets.only(bottom: 12),
         onTap: () {
-          context.push('/note/${note.id}');
+          context.push('/note_detail/${note.id}');
         },
         child: content,
       ),
@@ -509,7 +501,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
             return GlassCard(
               margin: const EdgeInsets.only(bottom: 12),
               onTap: () {
-                context.push('/note/${note.id}');
+                context.push('/note_detail/${note.id}');
               },
               child: ListTile(
                 contentPadding: EdgeInsets.zero,

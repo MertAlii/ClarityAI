@@ -103,10 +103,20 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
     try {
       final v2Notes = await DatabaseService.instance.getAllNotes();
+      final contextBuilder = <String>[];
+      for (final n in v2Notes) {
+        final materials = await DatabaseService.instance.getMaterialsForNote(n.id!);
+        if (materials.isNotEmpty) {
+           final content = materials.first.content;
+           final safeContent = content.length > 1500 ? '${content.substring(0, 1500)}... (Metin çok uzun olduğu için kırpıldı)' : content;
+           contextBuilder.add("Not #${n.id}: ${n.title}\nİÇERİK: $safeContent");
+        }
+      }
+      final contextText = contextBuilder.join("\n\n---\n\n");
       
       final responseText = await _aiService!.chat(
         message: text,
-        userNotes: v2Notes,
+        contextText: contextText,
       );
 
       final aiMsg = ChatMessage(
@@ -137,16 +147,19 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text('Sohbet', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('Sohbet', style: GoogleFonts.outfit(color: colorScheme.onSurface, fontWeight: FontWeight.bold)),
+        iconTheme: IconThemeData(color: colorScheme.onSurface),
       ),
       body: _isLoading 
-        ? const Center(child: CircularProgressIndicator(color: Color(0xFF84CC16)))
+        ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
         : Column(
             children: [
               Expanded(
@@ -156,11 +169,11 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                   itemCount: _messages.length + (_isTyping ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (index == _messages.length && _isTyping) {
-                      return const Align(
+                      return Align(
                         alignment: Alignment.centerLeft,
                         child: Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: CircularProgressIndicator(color: Color(0xFF84CC16), strokeWidth: 2),
+                          padding: const EdgeInsets.all(8.0),
+                          child: CircularProgressIndicator(color: colorScheme.primary, strokeWidth: 2),
                         ),
                       );
                     }
@@ -182,18 +195,18 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
                         margin: const EdgeInsets.only(bottom: 12),
                         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
                         decoration: BoxDecoration(
-                          color: isUser ? const Color(0xFF84CC16).withOpacity(0.2) : const Color(0xFF1A1A1A),
+                          color: isUser ? colorScheme.primary.withValues(alpha: 0.2) : colorScheme.surfaceContainer,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: isUser ? const Color(0xFF84CC16).withOpacity(0.5) : const Color(0xFF2E2E2E)),
+                          border: Border.all(color: isUser ? colorScheme.primary.withValues(alpha: 0.5) : colorScheme.outline.withValues(alpha: 0.2)),
                         ),
                         padding: const EdgeInsets.all(12),
                         child: isUser 
-                          ? Text(msg.content, style: GoogleFonts.inter(color: Colors.white))
+                          ? Text(msg.content, style: GoogleFonts.inter(color: colorScheme.onSurface))
                           : MarkdownBody(
                               data: displayContent,
                               styleSheet: MarkdownStyleSheet(
-                                p: GoogleFonts.inter(color: Colors.white),
-                                a: GoogleFonts.inter(color: const Color(0xFF84CC16), decoration: TextDecoration.underline),
+                                p: GoogleFonts.inter(color: colorScheme.onSurface),
+                                a: GoogleFonts.inter(color: colorScheme.primary, decoration: TextDecoration.underline),
                               ),
                               onTapLink: (text, href, title) {
                                 if (href != null) {
@@ -213,24 +226,27 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
   }
 
   Widget _buildInputArea() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(16).copyWith(bottom: MediaQuery.of(context).padding.bottom + 16),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
-        border: Border(top: BorderSide(color: Color(0xFF2E2E2E))),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainer,
+        border: Border(top: BorderSide(color: colorScheme.outline.withValues(alpha: 0.2))),
       ),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _textController,
-              style: GoogleFonts.inter(color: Colors.white),
+              style: GoogleFonts.inter(color: colorScheme.onSurface),
               decoration: InputDecoration(
                 hintText: 'Bir şeyler yazın...',
-                hintStyle: GoogleFonts.inter(color: Colors.white24),
+                hintStyle: GoogleFonts.inter(color: colorScheme.onSurface.withValues(alpha: 0.24)),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
                 filled: true,
-                fillColor: const Color(0xFF242424),
+                fillColor: colorScheme.surfaceContainerHighest,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
               onSubmitted: (_) => _sendMessage(),
@@ -241,8 +257,8 @@ class _ChatDetailPageState extends ConsumerState<ChatDetailPage> {
             onTap: _sendMessage,
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(color: Color(0xFF84CC16), shape: BoxShape.circle),
-              child: const Icon(Icons.send, color: Colors.black, size: 20),
+              decoration: BoxDecoration(color: colorScheme.primary, shape: BoxShape.circle),
+              child: Icon(Icons.send, color: colorScheme.onPrimary, size: 20),
             ),
           ),
         ],

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,10 +21,12 @@ class _SetupPageState extends ConsumerState<SetupPage> {
 
   String _selectedTheme = 'system';
   String _name = '';
+  
+  // AI Settings
   String _selectedProvider = '';
   String _apiKey = '';
-  String _ollamaEndpoint = 'http://10.0.2.2:11434';
-  String _ollamaModel = 'llama3';
+  String _customBaseUrl = '';
+  String _customModel = '';
 
   void _nextStep() {
     HapticFeedback.lightImpact();
@@ -42,8 +43,19 @@ class _SetupPageState extends ConsumerState<SetupPage> {
 
   Future<void> _finishSetup() async {
     final storage = StorageService();
-    final prefs = await SharedPreferences.getInstance();
     
+    // Save API Key or Custom settings
+    if (_selectedProvider == 'Custom') {
+      await storage.saveCustomProviderSettings(
+        baseUrl: _customBaseUrl.trim(),
+        model: _customModel.trim(),
+        apiKey: _apiKey.trim(),
+      );
+    } else if (_selectedProvider != 'Local Device') {
+      await storage.saveApiKey(_selectedProvider, _apiKey.trim());
+    }
+    await storage.saveAiProvider(_selectedProvider);
+
     // Save User Profile
     await storage.saveUserProfile(UserProfile(
       name: _name,
@@ -53,16 +65,7 @@ class _SetupPageState extends ConsumerState<SetupPage> {
       themeMode: _selectedTheme,
     ));
 
-    // Save API Key & Ollama settings
-    if (_selectedProvider == 'Ollama') {
-      await prefs.setString('ollama_endpoint', _ollamaEndpoint.trim());
-      await prefs.setString('ollama_model', _ollamaModel.trim());
-    } else {
-      await storage.saveApiKey(_selectedProvider, _apiKey.trim());
-    }
-    await prefs.setString('ai_provider', _selectedProvider);
-
-    // Apply Theme
+    // Apply Theme globally
     final themeMode = switch (_selectedTheme) {
       'dark' => ThemeMode.dark,
       'light' => ThemeMode.light,
@@ -73,6 +76,15 @@ class _SetupPageState extends ConsumerState<SetupPage> {
     if (mounted) {
       context.go('/');
     }
+  }
+
+  bool _isAiStepValid() {
+    if (_selectedProvider.isEmpty) return false;
+    if (_selectedProvider == 'Local Device') return true;
+    if (_selectedProvider == 'Custom') {
+      return _customBaseUrl.isNotEmpty && _customModel.isNotEmpty;
+    }
+    return _apiKey.isNotEmpty;
   }
 
   Widget _buildStepIndicator() {
@@ -94,6 +106,31 @@ class _SetupPageState extends ConsumerState<SetupPage> {
     );
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 24),
+            _buildStepIndicator(),
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                children: [
+                  _buildThemeStep(),
+                  _buildNameStep(),
+                  _buildAiStep(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildThemeStep() {
     final theme = Theme.of(context);
     return Padding(
@@ -101,7 +138,7 @@ class _SetupPageState extends ConsumerState<SetupPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('Tema Tercihiniz', style: theme.textTheme.displayMedium),
+          Text('Tema Tercihiniz', style: theme.textTheme.headlineLarge),
           const SizedBox(height: 32),
           _buildThemeOption('dark', 'Koyu Tema', LucideIcons.moon),
           const SizedBox(height: 16),
@@ -128,7 +165,6 @@ class _SetupPageState extends ConsumerState<SetupPage> {
     return GlassCard(
       onTap: () {
         setState(() => _selectedTheme = value);
-        // Preview theme
         final previewMode = switch (value) {
           'dark' => ThemeMode.dark,
           'light' => ThemeMode.light,
@@ -156,13 +192,13 @@ class _SetupPageState extends ConsumerState<SetupPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('Adınız Nedir?', style: theme.textTheme.displayMedium),
+          Text('Adınız Nedir?', style: theme.textTheme.headlineLarge),
           const SizedBox(height: 8),
           Text('Sizi nasıl karşılayalım?', style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.7))),
           const SizedBox(height: 48),
           TextField(
             onChanged: (val) => setState(() => _name = val),
-            style: theme.textTheme.displaySmall,
+            style: theme.textTheme.headlineSmall,
             textAlign: TextAlign.center,
             decoration: const InputDecoration(
               hintText: 'Örn: Mert',
@@ -188,27 +224,28 @@ class _SetupPageState extends ConsumerState<SetupPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 48),
-          Center(child: Text('Yapay Zeka Motorunu Seçin', style: theme.textTheme.displayMedium, textAlign: TextAlign.center)),
+          Center(child: Text('Yapay Zeka Motorunu Seçin', style: theme.textTheme.headlineLarge, textAlign: TextAlign.center)),
           const SizedBox(height: 32),
           Text('Bulut Çözümleri', style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.5))),
           const SizedBox(height: 16),
-          _buildAiOption('Groq', '🚀 Groq (Llama 3 - Hızlı)'),
+          _buildAiOption('Gemini', 'Google Gemini', LucideIcons.sparkles),
           const SizedBox(height: 12),
-          _buildAiOption('OpenAI', '🧠 OpenAI (GPT-4o)'),
+          _buildAiOption('OpenAI', 'ChatGPT (OpenAI)', LucideIcons.bot),
           const SizedBox(height: 12),
-          _buildAiOption('Gemini', '✨ Google Gemini'),
+          _buildAiOption('Groq', 'Groq (Hızlı Model)', LucideIcons.zap),
           
           const SizedBox(height: 32),
-          Text('Yerel Çözümler', style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.5))),
+          Text('Yerel & Özel Çözümler', style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurface.withOpacity(0.5))),
           const SizedBox(height: 16),
-          _buildAiOption('Ollama', '💻 Kendi Sunucum (Ollama)'),
+          _buildAiOption('Custom', 'Diğer (Kendi Sunucum / Ollama)', LucideIcons.server),
+          const SizedBox(height: 12),
+          _buildAiOption('Local Device', 'Model İndir (Yerel Cihaz)', LucideIcons.downloadCloud),
           
           const SizedBox(height: 48),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: (_selectedProvider.isNotEmpty && (_selectedProvider == 'Ollama' ? (_ollamaEndpoint.isNotEmpty && _ollamaModel.isNotEmpty) : _apiKey.isNotEmpty)) ? _nextStep : null,
+              onPressed: _isAiStepValid() ? _nextStep : null,
               child: const Text('Kaydet ve Başla'),
             ),
           ),
@@ -218,14 +255,16 @@ class _SetupPageState extends ConsumerState<SetupPage> {
     );
   }
 
-  Widget _buildAiOption(String id, String label) {
+  Widget _buildAiOption(String id, String label, IconData icon) {
     final isSelected = _selectedProvider == id;
     final theme = Theme.of(context);
 
     return GlassCard(
       onTap: () => setState(() {
         _selectedProvider = id;
-        _apiKey = ''; // Reset key on provider change
+        _apiKey = '';
+        _customBaseUrl = '';
+        _customModel = '';
       }),
       borderColor: isSelected ? theme.primaryColor : null,
       child: Column(
@@ -233,6 +272,8 @@ class _SetupPageState extends ConsumerState<SetupPage> {
         children: [
           Row(
             children: [
+              Icon(icon, color: isSelected ? theme.primaryColor : theme.colorScheme.onSurface),
+              const SizedBox(width: 12),
               Text(label, style: theme.textTheme.bodyLarge?.copyWith(fontWeight: isSelected ? FontWeight.bold : null)),
               const Spacer(),
               if (isSelected) Icon(LucideIcons.check, color: theme.primaryColor),
@@ -240,61 +281,62 @@ class _SetupPageState extends ConsumerState<SetupPage> {
           ),
           if (isSelected) ...[
             const SizedBox(height: 16),
-            if (id == 'Ollama') ...[
-              TextField(
-                onChanged: (val) => setState(() => _ollamaEndpoint = val),
-                decoration: InputDecoration(
-                  hintText: 'Endpoint (Örn: http://10.0.2.2:11434)',
-                  prefixIcon: const Icon(LucideIcons.link),
-                ),
-                controller: TextEditingController(text: _ollamaEndpoint),
+            if (id == 'Custom') ...[
+              TextFormField(
+                key: ValueKey('baseUrl_setup_$_selectedProvider'),
+                initialValue: _customBaseUrl,
+                onChanged: (val) => setState(() => _customBaseUrl = val),
+                decoration: const InputDecoration(labelText: 'URL Endpoint', prefixIcon: Icon(LucideIcons.link)),
               ),
               const SizedBox(height: 12),
-              TextField(
-                onChanged: (val) => setState(() => _ollamaModel = val),
-                decoration: InputDecoration(
-                  hintText: 'Model Adı (Örn: llama3)',
-                  prefixIcon: const Icon(LucideIcons.box),
-                ),
-                controller: TextEditingController(text: _ollamaModel),
+              TextFormField(
+                key: ValueKey('model_setup_$_selectedProvider'),
+                initialValue: _customModel,
+                onChanged: (val) => setState(() => _customModel = val),
+                decoration: const InputDecoration(labelText: 'Model Adı', prefixIcon: Icon(LucideIcons.box)),
               ),
-            ] else ...[
-              TextField(
+              const SizedBox(height: 12),
+              TextFormField(
+                key: ValueKey('key_setup_$_selectedProvider'),
+                initialValue: _apiKey,
+                onChanged: (val) => setState(() => _apiKey = val),
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'API Anahtarı', prefixIcon: Icon(LucideIcons.key)),
+              ),
+            ] else if (id != 'Local Device') ...[
+              TextFormField(
+                key: ValueKey('key_setup_$_selectedProvider'),
+                initialValue: _apiKey,
                 onChanged: (val) => setState(() => _apiKey = val),
                 obscureText: true,
                 decoration: InputDecoration(
-                  hintText: '$id API Anahtarını Girin',
+                  labelText: '$label API Anahtarı',
                   prefixIcon: const Icon(LucideIcons.key),
                 ),
               ),
-            ]
-          ]
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 24),
-            _buildStepIndicator(),
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _buildThemeStep(),
-                  _buildNameStep(),
-                  _buildAiStep(),
-                ],
+            ] else if (id == 'Local Device') ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.info, color: theme.colorScheme.primary),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Hiçbir veri sunucuya gitmez. Yaklaşık 2GB model dosyası indirilecek.',
+                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ]
           ],
-        ),
+        ],
       ),
     );
   }

@@ -32,31 +32,34 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     await showDialog(
       context: context,
       builder: (ctx) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+        
         return StatefulBuilder(
           builder: (ctx, setState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1A1A1A),
-              title: Text("Yeni Etkinlik", style: GoogleFonts.outfit(color: Colors.white)),
+              backgroundColor: colorScheme.surface,
+              title: Text("Yeni Etkinlik", style: GoogleFonts.outfit(color: colorScheme.onSurface)),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
                     controller: titleCtrl,
-                    style: GoogleFonts.inter(color: Colors.white),
+                    style: GoogleFonts.inter(color: colorScheme.onSurface),
                     decoration: InputDecoration(
                       hintText: "Örn: Matematik Vize",
-                      hintStyle: const TextStyle(color: Colors.white54),
+                      hintStyle: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.54)),
                       filled: true,
-                      fillColor: const Color(0xFF242424),
+                      fillColor: colorScheme.surfaceContainerHighest,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     ),
                   ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      const Icon(LucideIcons.calendar, color: Colors.white70),
+                      Icon(LucideIcons.calendar, color: colorScheme.onSurface.withValues(alpha: 0.7)),
                       const SizedBox(width: 8),
-                      Text("${selectedDate.day}/${selectedDate.month}/${selectedDate.year}", style: GoogleFonts.inter(color: Colors.white)),
+                      Text("${selectedDate.day}/${selectedDate.month}/${selectedDate.year}", style: GoogleFonts.inter(color: colorScheme.onSurface)),
                       const Spacer(),
                       TextButton(
                         onPressed: () async {
@@ -65,58 +68,32 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                             initialDate: selectedDate,
                             firstDate: DateTime.now().subtract(const Duration(days: 30)),
                             lastDate: DateTime.now().add(const Duration(days: 365)),
-                            builder: (context, child) {
-                              return Theme(
-                                data: Theme.of(context).copyWith(
-                                  colorScheme: const ColorScheme.dark(
-                                    primary: Color(0xFF84CC16),
-                                    onPrimary: Colors.black,
-                                    surface: Color(0xFF1A1A1A),
-                                    onSurface: Colors.white,
-                                  ),
-                                ),
-                                child: child!,
-                              );
-                            },
                           );
                           if (date != null) {
                             setState(() => selectedDate = date);
                           }
                         },
-                        child: Text("Tarih", style: GoogleFonts.inter(color: const Color(0xFF84CC16))),
+                        child: Text("Tarih", style: GoogleFonts.inter(color: colorScheme.primary)),
                       ),
                     ],
                   ),
                   Row(
                     children: [
-                      const Icon(LucideIcons.clock, color: Colors.white70),
+                      Icon(LucideIcons.clock, color: colorScheme.onSurface.withValues(alpha: 0.7)),
                       const SizedBox(width: 8),
-                      Text(selectedTime.format(context), style: GoogleFonts.inter(color: Colors.white)),
+                      Text(selectedTime.format(context), style: GoogleFonts.inter(color: colorScheme.onSurface)),
                       const Spacer(),
                       TextButton(
                         onPressed: () async {
                           final time = await showTimePicker(
                             context: ctx,
                             initialTime: selectedTime,
-                            builder: (context, child) {
-                              return Theme(
-                                data: Theme.of(context).copyWith(
-                                  colorScheme: const ColorScheme.dark(
-                                    primary: Color(0xFF84CC16),
-                                    onPrimary: Colors.black,
-                                    surface: Color(0xFF1A1A1A),
-                                    onSurface: Colors.white,
-                                  ),
-                                ),
-                                child: child!,
-                              );
-                            },
                           );
                           if (time != null) {
                             setState(() => selectedTime = time);
                           }
                         },
-                        child: Text("Saat", style: GoogleFonts.inter(color: const Color(0xFF84CC16))),
+                        child: Text("Saat", style: GoogleFonts.inter(color: colorScheme.primary)),
                       ),
                     ],
                   ),
@@ -125,10 +102,10 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: Text("İptal", style: GoogleFonts.inter(color: Colors.white54)),
+                  child: Text("İptal", style: GoogleFonts.inter(color: colorScheme.onSurface.withValues(alpha: 0.54))),
                 ),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF84CC16)),
+                  style: ElevatedButton.styleFrom(backgroundColor: colorScheme.primary),
                   onPressed: () async {
                     if (titleCtrl.text.isNotEmpty) {
                       final finalDateTime = DateTime(
@@ -149,7 +126,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                       if (ctx.mounted) Navigator.pop(ctx);
                     }
                   },
-                  child: Text("Ekle", style: GoogleFonts.inter(color: Colors.black)),
+                  child: Text("Ekle", style: GoogleFonts.inter(color: colorScheme.onPrimary)),
                 ),
               ],
             );
@@ -162,11 +139,13 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
   @override
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text("Takvim ve Etkinlikler", style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text("Takvim ve Etkinlikler", style: GoogleFonts.outfit(color: colorScheme.onSurface, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -207,23 +186,23 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                     return events.where((e) => isSameDay(DateTime.parse(e.dateStr), day)).toList();
                   },
                   calendarStyle: CalendarStyle(
-                    defaultTextStyle: GoogleFonts.inter(color: Colors.white),
-                    weekendTextStyle: GoogleFonts.inter(color: Colors.white54),
-                    outsideTextStyle: GoogleFonts.inter(color: Colors.white24),
-                    selectedDecoration: const BoxDecoration(color: Color(0xFF84CC16), shape: BoxShape.circle),
-                    todayDecoration: BoxDecoration(color: const Color(0xFF84CC16).withOpacity(0.3), shape: BoxShape.circle),
+                    defaultTextStyle: GoogleFonts.inter(color: colorScheme.onSurface),
+                    weekendTextStyle: GoogleFonts.inter(color: colorScheme.onSurface.withValues(alpha: 0.54)),
+                    outsideTextStyle: GoogleFonts.inter(color: colorScheme.onSurface.withValues(alpha: 0.24)),
+                    selectedDecoration: BoxDecoration(color: colorScheme.primary, shape: BoxShape.circle),
+                    todayDecoration: BoxDecoration(color: colorScheme.primary.withValues(alpha: 0.3), shape: BoxShape.circle),
                     markerDecoration: const BoxDecoration(color: Color(0xFFF97316), shape: BoxShape.circle),
                   ),
                   headerStyle: HeaderStyle(
                     formatButtonVisible: false,
                     titleCentered: true,
-                    titleTextStyle: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500),
-                    leftChevronIcon: const Icon(Icons.chevron_left, color: Colors.white),
-                    rightChevronIcon: const Icon(Icons.chevron_right, color: Colors.white),
+                    titleTextStyle: GoogleFonts.outfit(color: colorScheme.onSurface, fontSize: 18, fontWeight: FontWeight.w500),
+                    leftChevronIcon: Icon(Icons.chevron_left, color: colorScheme.onSurface),
+                    rightChevronIcon: Icon(Icons.chevron_right, color: colorScheme.onSurface),
                   ),
                   daysOfWeekStyle: DaysOfWeekStyle(
-                    weekdayStyle: GoogleFonts.inter(color: Colors.white70),
-                    weekendStyle: GoogleFonts.inter(color: Colors.white54),
+                    weekdayStyle: GoogleFonts.inter(color: colorScheme.onSurface.withValues(alpha: 0.7)),
+                    weekendStyle: GoogleFonts.inter(color: colorScheme.onSurface.withValues(alpha: 0.54)),
                   ),
                 ),
               ),
@@ -232,44 +211,45 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                 const SizedBox(height: 24),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text("Seçili Gün (${_selectedDay?.day}/${_selectedDay?.month})", style: GoogleFonts.outfit(color: const Color(0xFF84CC16), fontSize: 18, fontWeight: FontWeight.w600)),
+                  child: Text("Seçili Gün (${_selectedDay?.day}/${_selectedDay?.month})", style: GoogleFonts.outfit(color: colorScheme.primary, fontSize: 18, fontWeight: FontWeight.w600)),
                 ),
                 const SizedBox(height: 12),
-                ...selectedEvents.map((ev) => _buildEventCard(ev)),
+                ...selectedEvents.map((ev) => _buildEventCard(ev, theme)),
               ],
 
               const SizedBox(height: 24),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text("Yaklaşanlar", style: GoogleFonts.outfit(color: const Color(0xFF84CC16), fontSize: 18, fontWeight: FontWeight.w600)),
+                child: Text("Yaklaşanlar", style: GoogleFonts.outfit(color: colorScheme.primary, fontSize: 18, fontWeight: FontWeight.w600)),
               ),
               const SizedBox(height: 12),
               
               if (upcomingEvents.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text("Planlanmış bir sınavınız/etkinliğiniz yok.", style: GoogleFonts.inter(color: Colors.white54)),
+                  child: Text("Planlanmış bir sınavınız/etkinliğiniz yok.", style: GoogleFonts.inter(color: colorScheme.onSurface.withValues(alpha: 0.54))),
                 )
               else
-                ...upcomingEvents.take(5).map((ev) => _buildEventCard(ev)),
+                ...upcomingEvents.take(5).map((ev) => _buildEventCard(ev, theme)),
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFF84CC16))),
+        loading: () => Center(child: CircularProgressIndicator(color: colorScheme.primary)),
         error: (e, st) => Center(child: Text("Hata: $e", style: const TextStyle(color: Colors.red))),
       ),
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 100.0),
         child: FloatingActionButton(
+          heroTag: null,
           onPressed: _addEvent,
-          backgroundColor: const Color(0xFF84CC16),
-          child: const Icon(LucideIcons.plus, color: Colors.black),
+          backgroundColor: colorScheme.primary,
+          child: Icon(LucideIcons.plus, color: colorScheme.onPrimary),
         ),
       ),
     );
   }
 
-  Widget _buildEventCard(Event ev) {
+  Widget _buildEventCard(Event ev, ThemeData theme) {
     final date = DateTime.parse(ev.dateStr);
     final diff = date.difference(DateTime.now()).inDays;
     
@@ -287,16 +267,16 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.2),
+            color: color.withValues(alpha: 0.2),
             shape: BoxShape.circle,
           ),
           child: Icon(LucideIcons.calendarClock, color: color),
         ),
-        title: Text(ev.title, style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w600)),
-        subtitle: Text("${date.day}/${date.month}/${date.year} - $timeStr", style: GoogleFonts.inter(color: Colors.white54, fontSize: 12)),
+        title: Text(ev.title, style: GoogleFonts.inter(color: theme.colorScheme.onSurface, fontWeight: FontWeight.w600)),
+        subtitle: Text("${date.day}/${date.month}/${date.year} - $timeStr", style: GoogleFonts.inter(color: theme.colorScheme.onSurface.withValues(alpha: 0.54), fontSize: 12)),
         trailing: Text(
           diff == 0 ? "Bugün" : (diff < 0 ? "Geçti" : "$diff gün"),
-          style: GoogleFonts.inter(color: diff < 3 && diff >= 0 ? const Color(0xFFEF4444) : Colors.white70, fontWeight: FontWeight.w500),
+          style: GoogleFonts.inter(color: diff < 3 && diff >= 0 ? const Color(0xFFEF4444) : theme.colorScheme.onSurface.withValues(alpha: 0.7), fontWeight: FontWeight.w500),
         ),
       ),
     );

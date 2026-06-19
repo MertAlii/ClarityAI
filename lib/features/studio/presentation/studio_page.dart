@@ -133,7 +133,7 @@ class _StudioPageState extends State<StudioPage> with SingleTickerProviderStateM
       
       setState(() => _isAnalyzing = false);
       if (mounted) {
-        context.pushReplacement('/note/${_note!.id}');
+        context.pushReplacement('/note_detail/${_note!.id}');
       }
     } catch (e) {
       setState(() => _isAnalyzing = false);

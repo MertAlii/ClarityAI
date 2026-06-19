@@ -6,14 +6,16 @@ import 'package:clarity_ai/features/dashboard/presentation/dashboard_page.dart';
 import 'package:clarity_ai/features/note_creation/presentation/note_creation_page.dart';
 import 'package:clarity_ai/features/studio/presentation/studio_page.dart';
 import 'package:clarity_ai/features/dashboard/presentation/note_detail_page.dart';
-import 'package:clarity_ai/features/report/presentation/report_page.dart';
+
 import 'package:clarity_ai/features/settings/presentation/settings_page.dart';
 import 'package:clarity_ai/core/services/storage_service.dart';
 import 'package:clarity_ai/models/v2_models.dart';
 import 'package:clarity_ai/features/dashboard/presentation/flashcard_quiz_page.dart';
 import 'package:clarity_ai/features/dashboard/presentation/test_quiz_page.dart';
+import 'package:clarity_ai/features/dashboard/presentation/classic_quiz_page.dart';
 import 'package:clarity_ai/features/settings/presentation/stats_page.dart';
 import 'package:clarity_ai/features/chat/presentation/chat_detail_page.dart';
+import 'package:clarity_ai/features/settings/presentation/local_model_page.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -52,6 +54,17 @@ Future<GoRouter> createRouter() async {
         pageBuilder: (context, state) => CustomTransitionPage(
           key: state.pageKey,
           child: const SetupPage(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      ),
+      GoRoute(
+        path: '/local-models',
+        name: 'local-models',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const LocalModelPage(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },
@@ -116,21 +129,7 @@ Future<GoRouter> createRouter() async {
           );
         },
       ),
-      GoRoute(
-        path: '/note/:noteId',
-        name: 'report_page',
-        pageBuilder: (context, state) {
-          final noteId = int.parse(state.pathParameters['noteId']!);
-          return CustomTransitionPage(
-            key: state.pageKey,
-            child: ReportPage(noteId: noteId),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-          );
-        },
-      ),
+
       GoRoute(
         path: '/settings',
         name: 'settings',

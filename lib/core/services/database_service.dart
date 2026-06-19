@@ -21,8 +21,9 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
     );
   }
 
@@ -56,6 +57,7 @@ class DatabaseService {
         type TEXT,
         title TEXT,
         content TEXT,
+        filePath TEXT,
         createdAt TEXT
       )
     ''');
@@ -106,8 +108,14 @@ class DatabaseService {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT,
         dateStr TEXT,
+        timeStr TEXT,
         type TEXT,
-        colorHex TEXT
+        colorHex TEXT,
+        tag TEXT,
+        recurrence TEXT,
+        recurrenceEndDate TEXT,
+        isTodo INTEGER DEFAULT 0,
+        isCompleted INTEGER DEFAULT 0
       )
     ''');
 
@@ -117,9 +125,26 @@ class DatabaseService {
         provider TEXT,
         tokensUsed INTEGER,
         requestsCount INTEGER,
-        quotaLimit INTEGER
+        quotaLimit INTEGER,
+        date TEXT
       )
     ''');
+  }
+
+  Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Add new columns to events table
+      try { await db.execute('ALTER TABLE events ADD COLUMN timeStr TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE events ADD COLUMN tag TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE events ADD COLUMN recurrence TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE events ADD COLUMN recurrenceEndDate TEXT'); } catch (_) {}
+      try { await db.execute('ALTER TABLE events ADD COLUMN isTodo INTEGER DEFAULT 0'); } catch (_) {}
+      try { await db.execute('ALTER TABLE events ADD COLUMN isCompleted INTEGER DEFAULT 0'); } catch (_) {}
+      // Add filePath to note_materials
+      try { await db.execute('ALTER TABLE note_materials ADD COLUMN filePath TEXT'); } catch (_) {}
+      // Add date to token_usage for daily/weekly tracking
+      try { await db.execute('ALTER TABLE token_usage ADD COLUMN date TEXT'); } catch (_) {}
+    }
   }
 
   // --- Folders ---
@@ -130,12 +155,7 @@ class DatabaseService {
 
   Future<int> updateFolder(Folder folder) async {
     final db = await instance.database;
-    return await db.update(
-      'folders',
-      folder.toMap(),
-      where: 'id = ?',
-      whereArgs: [folder.id],
-    );
+    return await db.update('folders', folder.toMap(), where: 'id = ?', whereArgs: [folder.id]);
   }
 
   Future<int> deleteFolder(int id) async {
@@ -157,12 +177,7 @@ class DatabaseService {
 
   Future<int> updateNote(Note note) async {
     final db = await instance.database;
-    return await db.update(
-      'notes',
-      note.toMap(),
-      where: 'id = ?',
-      whereArgs: [note.id],
-    );
+    return await db.update('notes', note.toMap(), where: 'id = ?', whereArgs: [note.id]);
   }
 
   Future<int> deleteNote(int id) async {
@@ -170,25 +185,29 @@ class DatabaseService {
     return await db.delete('notes', where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Cascade delete: removes note and all related data
+  Future<void> deleteNoteWithRelations(int noteId) async {
+    final db = await instance.database;
+    await db.transaction((txn) async {
+      await txn.delete('note_materials', where: 'noteId = ?', whereArgs: [noteId]);
+      await txn.delete('ai_reports', where: 'noteId = ?', whereArgs: [noteId]);
+      await txn.delete('quizzes', where: 'noteId = ?', whereArgs: [noteId]);
+      await txn.delete('notes', where: 'id = ?', whereArgs: [noteId]);
+    });
+  }
+
   Future<List<Note>> getAllNotes({int? folderId}) async {
     final db = await instance.database;
     final where = folderId != null ? 'folderId = ?' : null;
     final whereArgs = folderId != null ? [folderId] : null;
-    final result = await db.query(
-      'notes',
-      where: where,
-      whereArgs: whereArgs,
-      orderBy: 'createdAt DESC',
-    );
+    final result = await db.query('notes', where: where, whereArgs: whereArgs, orderBy: 'createdAt DESC');
     return result.map((map) => Note.fromMap(map)).toList();
   }
 
   Future<Note?> getNoteById(int id) async {
     final db = await instance.database;
     final maps = await db.query('notes', where: 'id = ?', whereArgs: [id]);
-    if (maps.isNotEmpty) {
-      return Note.fromMap(maps.first);
-    }
+    if (maps.isNotEmpty) return Note.fromMap(maps.first);
     return null;
   }
 
@@ -205,12 +224,7 @@ class DatabaseService {
 
   Future<List<NoteMaterial>> getMaterialsForNote(int noteId) async {
     final db = await instance.database;
-    final result = await db.query(
-      'note_materials',
-      where: 'noteId = ?',
-      whereArgs: [noteId],
-      orderBy: 'createdAt ASC',
-    );
+    final result = await db.query('note_materials', where: 'noteId = ?', whereArgs: [noteId], orderBy: 'createdAt ASC');
     return result.map((map) => NoteMaterial.fromMap(map)).toList();
   }
 
@@ -227,12 +241,7 @@ class DatabaseService {
 
   Future<List<AiReportData>> getReportsForNote(int noteId) async {
     final db = await instance.database;
-    final result = await db.query(
-      'ai_reports',
-      where: 'noteId = ?',
-      whereArgs: [noteId],
-      orderBy: 'createdAt DESC',
-    );
+    final result = await db.query('ai_reports', where: 'noteId = ?', whereArgs: [noteId], orderBy: 'createdAt DESC');
     return result.map((map) => AiReportData.fromMap(map)).toList();
   }
 
@@ -242,6 +251,11 @@ class DatabaseService {
     return await db.insert('quizzes', quiz.toMap());
   }
 
+  Future<int> updateQuiz(QuizData quiz) async {
+    final db = await instance.database;
+    return await db.update('quizzes', quiz.toMap(), where: 'id = ?', whereArgs: [quiz.id]);
+  }
+
   Future<int> deleteQuiz(int id) async {
     final db = await instance.database;
     return await db.delete('quizzes', where: 'id = ?', whereArgs: [id]);
@@ -249,22 +263,12 @@ class DatabaseService {
 
   Future<int> updateQuizScore(int id, double score) async {
     final db = await instance.database;
-    return await db.update(
-      'quizzes',
-      {'score': score},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    return await db.update('quizzes', {'score': score}, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<List<QuizData>> getQuizzesForNote(int noteId) async {
     final db = await instance.database;
-    final result = await db.query(
-      'quizzes',
-      where: 'noteId = ?',
-      whereArgs: [noteId],
-      orderBy: 'createdAt DESC',
-    );
+    final result = await db.query('quizzes', where: 'noteId = ?', whereArgs: [noteId], orderBy: 'createdAt DESC');
     return result.map((map) => QuizData.fromMap(map)).toList();
   }
 
@@ -276,6 +280,7 @@ class DatabaseService {
 
   Future<int> deleteChatSession(String id) async {
     final db = await instance.database;
+    await db.delete('chat_messages', where: 'sessionId = ?', whereArgs: [id]);
     return await db.delete('chat_sessions', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -293,12 +298,13 @@ class DatabaseService {
 
   Future<List<ChatMessage>> getMessagesForSession(String sessionId) async {
     final db = await instance.database;
-    final result = await db.query(
-      'chat_messages',
-      where: 'sessionId = ?',
-      whereArgs: [sessionId],
-      orderBy: 'timestamp ASC',
-    );
+    final result = await db.query('chat_messages', where: 'sessionId = ?', whereArgs: [sessionId], orderBy: 'timestamp ASC');
+    return result.map((map) => ChatMessage.fromMap(map)).toList();
+  }
+
+  Future<List<ChatMessage>> searchChatMessages(String query) async {
+    final db = await instance.database;
+    final result = await db.query('chat_messages', where: 'content LIKE ?', whereArgs: ['%$query%'], orderBy: 'timestamp DESC');
     return result.map((map) => ChatMessage.fromMap(map)).toList();
   }
 
@@ -310,12 +316,7 @@ class DatabaseService {
 
   Future<int> updateEvent(Event event) async {
     final db = await instance.database;
-    return await db.update(
-      'events',
-      event.toMap(),
-      where: 'id = ?',
-      whereArgs: [event.id],
-    );
+    return await db.update('events', event.toMap(), where: 'id = ?', whereArgs: [event.id]);
   }
 
   Future<int> deleteEvent(int id) async {
@@ -329,9 +330,19 @@ class DatabaseService {
     return result.map((map) => Event.fromMap(map)).toList();
   }
 
+  Future<void> toggleTodoCompletion(int eventId) async {
+    final db = await instance.database;
+    final result = await db.query('events', where: 'id = ?', whereArgs: [eventId]);
+    if (result.isNotEmpty) {
+      final current = result.first['isCompleted'] as int? ?? 0;
+      await db.update('events', {'isCompleted': current == 0 ? 1 : 0}, where: 'id = ?', whereArgs: [eventId]);
+    }
+  }
+
   // --- TokenUsage ---
   Future<void> incrementTokenUsage(String provider, int tokens) async {
     final db = await instance.database;
+    final today = DateTime.now().toIso8601String().substring(0, 10);
     final usage = await getTokenUsage(provider);
 
     if (usage != null) {
@@ -349,21 +360,16 @@ class DatabaseService {
         'provider': provider,
         'tokensUsed': tokens,
         'requestsCount': 1,
-        'quotaLimit': 0, // Default quota
+        'quotaLimit': 0,
+        'date': today,
       });
     }
   }
 
   Future<TokenUsage?> getTokenUsage(String provider) async {
     final db = await instance.database;
-    final result = await db.query(
-      'token_usage',
-      where: 'provider = ?',
-      whereArgs: [provider],
-    );
-    if (result.isNotEmpty) {
-      return TokenUsage.fromMap(result.first);
-    }
+    final result = await db.query('token_usage', where: 'provider = ?', whereArgs: [provider]);
+    if (result.isNotEmpty) return TokenUsage.fromMap(result.first);
     return null;
   }
 
@@ -372,18 +378,14 @@ class DatabaseService {
     final usage = await getTokenUsage(provider);
 
     if (usage != null) {
-      return await db.update(
-        'token_usage',
-        {'quotaLimit': quota},
-        where: 'id = ?',
-        whereArgs: [usage.id],
-      );
+      return await db.update('token_usage', {'quotaLimit': quota}, where: 'id = ?', whereArgs: [usage.id]);
     } else {
       return await db.insert('token_usage', {
         'provider': provider,
         'tokensUsed': 0,
         'requestsCount': 0,
         'quotaLimit': quota,
+        'date': DateTime.now().toIso8601String().substring(0, 10),
       });
     }
   }

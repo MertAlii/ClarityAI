@@ -23,7 +23,7 @@ Future<void> showCreateFolderDialog(BuildContext context, WidgetRef ref) async {
           return AlertDialog(
             backgroundColor: isDark ? AppColors.darkSurfaceElevated : AppColors.lightSurfaceElevated,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            title: Text("Yeni Klasör", style: AppTextStyles.headline3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)),
+            title: Text("Yeni Klasör", style: AppTextStyles.h3.copyWith(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
